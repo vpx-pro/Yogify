@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Plus, Calendar, Clock, Users, MapPin, Edit, Trash2 } from 'lucide-react-native';
+import { Plus, Calendar, Clock, Users, MapPin, CreditCard as Edit, Trash2 } from 'lucide-react-native';
 import CreateClassModal from '@/components/CreateClassModal';
 import type { Database } from '@/lib/supabase';
 
