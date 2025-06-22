@@ -92,7 +92,11 @@ export default function BookingsScreen() {
         <Text style={styles.title}>My Bookings</Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {loading ? (
           <Text style={styles.loadingText}>Loading bookings...</Text>
         ) : bookings.length > 0 ? (
@@ -181,6 +185,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Extra padding to account for tab bar
   },
   loadingText: {
     fontSize: 16,

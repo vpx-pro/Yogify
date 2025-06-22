@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Calendar, User, BookOpen } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { Platform } from 'react-native';
 
 export default function TabLayout() {
   const { profile } = useAuth();
@@ -16,9 +17,21 @@ export default function TabLayout() {
           backgroundColor: 'white',
           borderTopWidth: 1,
           borderTopColor: '#E0E0E0',
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
+          paddingBottom: Platform.OS === 'ios' ? 34 : 20, // Extra space for home indicator
+          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 88 : 75, // Increased height
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+          marginBottom: Platform.OS === 'ios' ? 0 : 5,
+        },
+        tabBarIconStyle: {
+          marginTop: 5,
         },
       }}>
       <Tabs.Screen

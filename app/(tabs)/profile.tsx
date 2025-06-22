@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { User, Settings, CircleHelp as HelpCircle, LogOut, Mail, Calendar } from 'lucide-react-native';
@@ -32,7 +32,11 @@ export default function ProfileScreen() {
         <Text style={styles.title}>Profile</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Info */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
@@ -91,7 +95,7 @@ export default function ProfileScreen() {
           <Text style={styles.appInfoText}>Yogify v1.0.0</Text>
           <Text style={styles.appInfoText}>Find peace, balance, and strength</Text>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -113,6 +117,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Extra padding to account for tab bar
   },
   profileSection: {
     backgroundColor: 'white',
@@ -213,7 +220,7 @@ const styles = StyleSheet.create({
   appInfo: {
     alignItems: 'center',
     marginTop: 'auto',
-    marginBottom: 40,
+    marginBottom: 20,
   },
   appInfoText: {
     fontSize: 12,

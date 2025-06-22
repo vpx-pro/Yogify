@@ -38,7 +38,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.header}>
           <Text style={styles.greeting}>
             Hello, {profile?.full_name?.split(' ')[0] || 'User'}! 👋
@@ -156,6 +159,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F8F8',
+  },
+  scrollContent: {
+    paddingBottom: 100, // Extra padding to account for tab bar
   },
   header: {
     padding: 20,
