@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, TextInput, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Plus, Calendar, Clock, Users, MapPin, CreditCard as Edit, Trash2 } from 'lucide-react-native';
+import { Plus, Calendar, Clock, Users, MapPin, Edit, Trash2 } from 'lucide-react-native';
+import CreateClassModal from '@/components/CreateClassModal';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'];
@@ -12,18 +13,7 @@ export default function ClassesScreen() {
   const [classes, setClasses] = useState<YogaClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newClass, setNewClass] = useState({
-    title: '',
-    description: '',
-    date: '',
-    time: '',
-    duration: 60,
-    max_participants: 10,
-    price: 25,
-    level: 'beginner' as 'beginner' | 'intermediate' | 'advanced',
-    type: 'Hatha',
-    location: 'Studio A',
-  });
+  const [createLoading, setCreateLoading] = useState(false);
 
   const isTeacher = profile?.role === 'teacher';
 
@@ -45,22 +35,21 @@ export default function ClassesScreen() {
       setClasses(data || []);
     } catch (error) {
       console.error('Error fetching classes:', error);
+      Alert.alert('Error', 'Failed to load classes');
     } finally {
       setLoading(false);
     }
   };
 
-  const createClass = async () => {
-    if (!profile?.id || !newClass.title || !newClass.date || !newClass.time) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
+  const createClass = async (classData: any) => {
+    if (!profile?.id) return;
 
+    setCreateLoading(true);
     try {
       const { error } = await supabase
         .from('yoga_classes')
         .insert([{
-          ...newClass,
+          ...classData,
           teacher_id: profile.id,
           current_participants: 0,
         }]);
@@ -68,23 +57,13 @@ export default function ClassesScreen() {
       if (error) throw error;
 
       setShowCreateModal(false);
-      setNewClass({
-        title: '',
-        description: '',
-        date: '',
-        time: '',
-        duration: 60,
-        max_participants: 10,
-        price: 25,
-        level: 'beginner',
-        type: 'Hatha',
-        location: 'Studio A',
-      });
       fetchClasses();
       Alert.alert('Success', 'Class created successfully!');
     } catch (error) {
       console.error('Error creating class:', error);
-      Alert.alert('Error', 'Failed to create class');
+      Alert.alert('Error', 'Failed to create class. Please try again.');
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -92,6 +71,20 @@ export default function ClassesScreen() {
     if (!profile?.id) return;
 
     try {
+      // Check if already booked
+      const { data: existingBooking } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('student_id', profile.id)
+        .eq('class_id', classId)
+        .eq('status', 'confirmed')
+        .single();
+
+      if (existingBooking) {
+        Alert.alert('Already Booked', 'You have already booked this class.');
+        return;
+      }
+
       const { error } = await supabase
         .from('bookings')
         .insert([{
@@ -115,8 +108,67 @@ export default function ClassesScreen() {
       Alert.alert('Success', 'Class booked successfully!');
     } catch (error) {
       console.error('Error booking class:', error);
-      Alert.alert('Error', 'Failed to book class');
+      Alert.alert('Error', 'Failed to book class. Please try again.');
     }
+  };
+
+  const deleteClass = async (classId: string) => {
+    Alert.alert(
+      'Delete Class',
+      'Are you sure you want to delete this class? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('yoga_classes')
+                .delete()
+                .eq('id', classId);
+
+              if (error) throw error;
+
+              fetchClasses();
+              Alert.alert('Success', 'Class deleted successfully');
+            } catch (error) {
+              console.error('Error deleting class:', error);
+              Alert.alert('Error', 'Failed to delete class');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatTime = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':');
+    const date = new Date();
+    date.setHours(parseInt(hours), parseInt(minutes));
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const isClassFull = (yogaClass: YogaClass) => {
+    return yogaClass.current_participants >= yogaClass.max_participants;
+  };
+
+  const isClassPast = (dateString: string, timeString: string) => {
+    const classDateTime = new Date(`${dateString} ${timeString}`);
+    return classDateTime < new Date();
   };
 
   return (
@@ -143,71 +195,101 @@ export default function ClassesScreen() {
         {loading ? (
           <Text style={styles.loadingText}>Loading classes...</Text>
         ) : classes.length > 0 ? (
-          classes.map((yogaClass) => (
-            <View key={yogaClass.id} style={styles.classCard}>
-              <View style={styles.classHeader}>
-                <Text style={styles.classTitle}>{yogaClass.title}</Text>
-                <View style={styles.levelBadge}>
-                  <Text style={styles.levelText}>{yogaClass.level}</Text>
-                </View>
-              </View>
-              
-              <Text style={styles.classDescription} numberOfLines={2}>
-                {yogaClass.description}
-              </Text>
-              
-              <View style={styles.classDetails}>
-                <View style={styles.detailItem}>
-                  <Calendar size={16} color="#666" />
-                  <Text style={styles.detailText}>{yogaClass.date}</Text>
-                </View>
-                
-                <View style={styles.detailItem}>
-                  <Clock size={16} color="#666" />
-                  <Text style={styles.detailText}>{yogaClass.time} ({yogaClass.duration}min)</Text>
-                </View>
-                
-                <View style={styles.detailItem}>
-                  <Users size={16} color="#666" />
-                  <Text style={styles.detailText}>
-                    {yogaClass.current_participants}/{yogaClass.max_participants}
-                  </Text>
-                </View>
-                
-                <View style={styles.detailItem}>
-                  <MapPin size={16} color="#666" />
-                  <Text style={styles.detailText}>{yogaClass.location}</Text>
-                </View>
-              </View>
-              
-              <View style={styles.classFooter}>
-                <Text style={styles.priceText}>${yogaClass.price}</Text>
-                {isTeacher ? (
-                  <View style={styles.teacherActions}>
-                    <TouchableOpacity style={styles.editButton}>
-                      <Edit size={16} color="#C4896F" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.deleteButton}>
-                      <Trash2 size={16} color="#FF6B6B" />
-                    </TouchableOpacity>
+          classes.map((yogaClass) => {
+            const isPast = isClassPast(yogaClass.date, yogaClass.time);
+            const isFull = isClassFull(yogaClass);
+            
+            return (
+              <View key={yogaClass.id} style={[
+                styles.classCard,
+                isPast && styles.pastClassCard
+              ]}>
+                <View style={styles.classHeader}>
+                  <Text style={styles.classTitle}>{yogaClass.title}</Text>
+                  <View style={[
+                    styles.levelBadge,
+                    isPast && styles.pastLevelBadge
+                  ]}>
+                    <Text style={styles.levelText}>{yogaClass.level}</Text>
                   </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      yogaClass.current_participants >= yogaClass.max_participants && styles.disabledButton
-                    ]}
-                    onPress={() => bookClass(yogaClass.id)}
-                    disabled={yogaClass.current_participants >= yogaClass.max_participants}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {yogaClass.current_participants >= yogaClass.max_participants ? 'Full' : 'Book Now'}
-                    </Text>
-                  </TouchableOpacity>
+                </View>
+                
+                <Text style={styles.classType}>{yogaClass.type}</Text>
+                
+                {yogaClass.description && (
+                  <Text style={styles.classDescription} numberOfLines={2}>
+                    {yogaClass.description}
+                  </Text>
                 )}
+                
+                <View style={styles.classDetails}>
+                  <View style={styles.detailItem}>
+                    <Calendar size={16} color="#666" />
+                    <Text style={styles.detailText}>{formatDate(yogaClass.date)}</Text>
+                  </View>
+                  
+                  <View style={styles.detailItem}>
+                    <Clock size={16} color="#666" />
+                    <Text style={styles.detailText}>
+                      {formatTime(yogaClass.time)} ({yogaClass.duration}min)
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.detailItem}>
+                    <Users size={16} color="#666" />
+                    <Text style={[
+                      styles.detailText,
+                      isFull && styles.fullText
+                    ]}>
+                      {yogaClass.current_participants}/{yogaClass.max_participants}
+                      {isFull && ' (Full)'}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.detailItem}>
+                    <MapPin size={16} color="#666" />
+                    <Text style={styles.detailText}>{yogaClass.location}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.classFooter}>
+                  <Text style={styles.priceText}>${yogaClass.price}</Text>
+                  {isTeacher ? (
+                    <View style={styles.teacherActions}>
+                      <TouchableOpacity 
+                        style={styles.editButton}
+                        onPress={() => {
+                          // TODO: Implement edit functionality
+                          Alert.alert('Coming Soon', 'Edit functionality will be available soon!');
+                        }}
+                      >
+                        <Edit size={16} color="#C4896F" />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.deleteButton}
+                        onPress={() => deleteClass(yogaClass.id)}
+                      >
+                        <Trash2 size={16} color="#FF6B6B" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        (isFull || isPast) && styles.disabledButton
+                      ]}
+                      onPress={() => bookClass(yogaClass.id)}
+                      disabled={isFull || isPast}
+                    >
+                      <Text style={styles.actionButtonText}>
+                        {isPast ? 'Past' : isFull ? 'Full' : 'Book Now'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
-          ))
+            );
+          })
         ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>
@@ -221,111 +303,12 @@ export default function ClassesScreen() {
       </ScrollView>
 
       {/* Create Class Modal */}
-      <Modal
+      <CreateClassModal
         visible={showCreateModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Create Class</Text>
-            <TouchableOpacity onPress={createClass}>
-              <Text style={styles.saveText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Class Title *</Text>
-              <TextInput
-                style={styles.input}
-                value={newClass.title}
-                onChangeText={(text) => setNewClass({ ...newClass, title: text })}
-                placeholder="e.g., Morning Hatha Yoga"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={newClass.description}
-                onChangeText={(text) => setNewClass({ ...newClass, description: text })}
-                placeholder="Describe your class..."
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                <Text style={styles.inputLabel}>Date *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newClass.date}
-                  onChangeText={(text) => setNewClass({ ...newClass, date: text })}
-                  placeholder="YYYY-MM-DD"
-                />
-              </View>
-
-              <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}>
-                <Text style={styles.inputLabel}>Time *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newClass.time}
-                  onChangeText={(text) => setNewClass({ ...newClass, time: text })}
-                  placeholder="HH:MM"
-                />
-              </View>
-            </View>
-
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                <Text style={styles.inputLabel}>Duration (minutes)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newClass.duration.toString()}
-                  onChangeText={(text) => setNewClass({ ...newClass, duration: parseInt(text) || 60 })}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}>
-                <Text style={styles.inputLabel}>Max Participants</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newClass.max_participants.toString()}
-                  onChangeText={(text) => setNewClass({ ...newClass, max_participants: parseInt(text) || 10 })}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Price ($)</Text>
-              <TextInput
-                style={styles.input}
-                value={newClass.price.toString()}
-                onChangeText={(text) => setNewClass({ ...newClass, price: parseInt(text) || 25 })}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Location</Text>
-              <TextInput
-                style={styles.input}
-                value={newClass.location}
-                onChangeText={(text) => setNewClass({ ...newClass, location: text })}
-                placeholder="e.g., Studio A"
-              />
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={createClass}
+        loading={createLoading}
+      />
     </SafeAreaView>
   );
 }
@@ -354,13 +337,18 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
   },
   scrollContent: {
-    paddingBottom: 100, // Extra padding to account for tab bar
+    paddingBottom: 100,
   },
   loadingText: {
     fontSize: 16,
@@ -379,6 +367,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+  pastClassCard: {
+    opacity: 0.7,
+    backgroundColor: '#F5F5F5',
+  },
   classHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -390,6 +382,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     flex: 1,
+    marginRight: 12,
   },
   levelBadge: {
     backgroundColor: '#C4896F',
@@ -397,11 +390,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
+  pastLevelBadge: {
+    backgroundColor: '#999',
+  },
   levelText: {
     fontSize: 12,
     color: 'white',
     fontWeight: '500',
     textTransform: 'capitalize',
+  },
+  classType: {
+    fontSize: 14,
+    color: '#C4896F',
+    fontWeight: '500',
+    marginBottom: 8,
   },
   classDescription: {
     fontSize: 14,
@@ -423,6 +425,10 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 12,
     color: '#666',
+  },
+  fullText: {
+    color: '#FF6B6B',
+    fontWeight: '500',
   },
   classFooter: {
     flexDirection: 'row',
@@ -454,9 +460,13 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
   },
   deleteButton: {
     padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFE5E5',
   },
   emptyState: {
     padding: 40,
@@ -466,61 +476,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#F8F8F8',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    backgroundColor: 'white',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  cancelText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  saveText: {
-    fontSize: 16,
-    color: '#C4896F',
-    fontWeight: '600',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  row: {
-    flexDirection: 'row',
   },
 });
