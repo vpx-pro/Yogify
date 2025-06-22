@@ -11,6 +11,9 @@ export default function IndexScreen() {
     if (!loading) {
       if (user && profile) {
         router.replace('/(tabs)');
+      } else if (user && !profile) {
+        // User is authenticated but has no profile, maybe onboarding wasn't completed
+        router.replace('/onboarding');
       } else {
         router.replace('/onboarding');
       }

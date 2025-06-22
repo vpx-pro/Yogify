@@ -34,7 +34,7 @@ export default function WelcomeUserScreen() {
           <Text style={styles.journeyText}>Your Yogify journey starts here</Text>
 
           <View style={styles.roleContainer}>
-            <Text style={styles.roleLabel}>You're logged in as</Text>
+            <Text style={styles.roleLabel}>You&apos;re logged in as</Text>
             <View style={styles.roleBadge}>
               <Text style={styles.roleText}>
                 {profile?.role === 'teacher' ? 'Teacher' : 'Student'}

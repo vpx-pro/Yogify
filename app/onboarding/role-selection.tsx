@@ -3,11 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-na
 import { useRouter } from 'expo-router';
 import { ArrowLeft, User, GraduationCap } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 
 export default function RoleSelectionScreen() {
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [selectedRole, setSelectedRole] = useState<'student' | 'teacher' | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -17,13 +16,9 @@ export default function RoleSelectionScreen() {
     setLoading(true);
     
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: selectedRole })
-        .eq('id', user.id);
-
+      const { error } = await updateProfile({ role: selectedRole });
       if (error) throw error;
-      
+
       router.push('/onboarding/welcome-user');
     } catch (error) {
       console.error('Error updating role:', error);
