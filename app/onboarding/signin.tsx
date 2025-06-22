@@ -71,7 +71,14 @@ export default function SignInScreen() {
             </Text>
           </TouchableOpacity>
 
-          <Text style={styles.linkText}>Don&apos;t have an account? <Text style={styles.link} onPress={() => router.replace('/onboarding/signup')}>Sign up</Text></Text>
+          <TouchableOpacity
+            style={styles.signUpLink}
+            onPress={() => router.push('/onboarding/signup')}
+          >
+            <Text style={styles.signUpLinkText}>
+              Don&apos;t have an account? Sign Up
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -128,13 +135,12 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-  linkText: {
+  signUpLink: {
     alignItems: 'center',
     marginTop: 20,
   },
-  link: {
+  signUpLinkText: {
     fontSize: 14,
     color: '#666',
-    fontWeight: '600',
   },
 });
