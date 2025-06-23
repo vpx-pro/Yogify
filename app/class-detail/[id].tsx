@@ -13,18 +13,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { 
-  ArrowLeft, 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  User, 
-  Users, 
-  Globe,
-  DollarSign,
-  Star,
-  CheckCircle 
-} from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, MapPin, User, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
