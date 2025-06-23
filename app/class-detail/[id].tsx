@@ -8,13 +8,13 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle } from 'lucide-react-native';
-import TeacherAvatar from '@/components/TeacherAvatar';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle, User } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -114,42 +114,6 @@ export default function ClassDetailScreen() {
     }
   };
 
-  const syncParticipantCount = async () => {
-    if (!id || !yogaClass) return;
-
-    try {
-      // Get actual count from bookings
-      const { count, error: countError } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('class_id', id)
-        .eq('status', 'confirmed');
-
-      if (countError) throw countError;
-
-      const actualCount = count || 0;
-      setActualParticipantCount(actualCount);
-
-      // Update the yoga_classes table if there's a discrepancy
-      if (actualCount !== yogaClass.current_participants) {
-        const { error: updateError } = await supabase
-          .from('yoga_classes')
-          .update({ current_participants: actualCount })
-          .eq('id', id);
-
-        if (updateError) throw updateError;
-
-        // Update local state
-        setYogaClass(prev => prev ? {
-          ...prev,
-          current_participants: actualCount
-        } : null);
-      }
-    } catch (error) {
-      console.error('Error syncing participant count:', error);
-    }
-  };
-
   const handleBookClass = async () => {
     if (!profile?.id || !yogaClass) return;
 
@@ -174,6 +138,7 @@ export default function ClassDetailScreen() {
           student_id: profile.id,
           class_id: yogaClass.id,
           status: 'confirmed',
+          payment_status: 'pending',
         }]);
 
       if (bookingError) throw bookingError;
@@ -201,15 +166,8 @@ export default function ClassDetailScreen() {
       // Refresh booking status
       await checkExistingBooking();
 
-      // Show success message with participant count
-      Alert.alert(
-        'Booking Confirmed!', 
-        `You are booked for this class (${newParticipantCount} participants enrolled)`,
-        [
-          { text: 'View My Bookings', onPress: () => router.push('/(tabs)/bookings') },
-          { text: 'OK', onPress: () => router.back() }
-        ]
-      );
+      // Navigate to booking confirmation
+      router.push('/booking-confirmation');
     } catch (error) {
       console.error('Error booking class:', error);
       Alert.alert('Booking Failed', 'Failed to book the class. Please try again.');
@@ -264,13 +222,6 @@ export default function ClassDetailScreen() {
     return yogaClass?.location.toLowerCase() === 'online';
   };
 
-  // Sync participant count when component mounts or when returning from background
-  useEffect(() => {
-    if (yogaClass) {
-      syncParticipantCount();
-    }
-  }, [yogaClass]);
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -321,27 +272,23 @@ export default function ClassDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Class Header */}
-        <View style={styles.classHeader}>
-          <View style={styles.classHeaderContent}>
-            <Text style={styles.classTitle}>{yogaClass.title}</Text>
-            <Text style={styles.classType}>{yogaClass.type}</Text>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>{yogaClass.level}</Text>
-            </View>
-          </View>
+        {/* Class Image */}
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ 
+              uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+            }}
+            style={styles.classImage}
+            resizeMode="cover"
+          />
         </View>
 
         {/* Teacher Info */}
         <View style={styles.teacherSection}>
-          <Text style={styles.sectionTitle}>Instructor</Text>
           <View style={styles.teacherInfo}>
-            <TeacherAvatar
-              teacherId={yogaClass.teacher_id}
-              teacherName={teacherName}
-              avatarUrl={yogaClass.profiles?.avatar_url}
-              size="LARGE"
-            />
+            <View style={styles.teacherAvatar}>
+              <User size={24} color="white" />
+            </View>
             <View style={styles.teacherDetails}>
               <Text style={styles.teacherName}>
                 {teacherName}
@@ -350,6 +297,17 @@ export default function ClassDetailScreen() {
                 <Star size={14} color="#FFD700" fill="#FFD700" />
                 <Text style={styles.ratingText}>4.8 (127 reviews)</Text>
               </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Class Header */}
+        <View style={styles.classHeader}>
+          <View style={styles.classHeaderContent}>
+            <Text style={styles.classTitle}>{yogaClass.title}</Text>
+            <Text style={styles.classType}>{yogaClass.type}</Text>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelText}>{yogaClass.level}</Text>
             </View>
           </View>
         </View>
@@ -554,11 +512,52 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '500',
   },
+  imageContainer: {
+    height: 250,
+  },
+  classImage: {
+    width: '100%',
+    height: '100%',
+  },
+  teacherSection: {
+    backgroundColor: 'white',
+    padding: 20,
+  },
+  teacherInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teacherAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#C4896F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  teacherDetails: {
+    flex: 1,
+  },
+  teacherName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  teacherRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    color: '#666',
+  },
   classHeader: {
     backgroundColor: 'white',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    marginTop: 8,
   },
   classHeaderContent: {
     alignItems: 'flex-start',
@@ -587,7 +586,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textTransform: 'capitalize',
   },
-  teacherSection: {
+  detailsSection: {
     backgroundColor: 'white',
     padding: 20,
     marginTop: 8,
@@ -597,34 +596,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 16,
-  },
-  teacherInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  teacherDetails: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  teacherName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  teacherRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  detailsSection: {
-    backgroundColor: 'white',
-    padding: 20,
-    marginTop: 8,
   },
   detailItem: {
     flexDirection: 'row',

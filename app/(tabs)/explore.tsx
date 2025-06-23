@@ -8,14 +8,13 @@ import {
   SafeAreaView, 
   RefreshControl,
   ActivityIndicator,
-  Alert 
+  Alert,
+  Image 
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, MapPin, Globe, Filter } from 'lucide-react-native';
-import TeacherAvatar from '@/components/TeacherAvatar';
-import { AvatarService } from '@/lib/avatarService';
+import { Calendar, Clock, MapPin, Globe, Filter, User } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -62,7 +61,6 @@ export default function ExploreScreen() {
   useEffect(() => {
     if (classes.length > 0) {
       fetchParticipantCounts();
-      preloadTeacherAvatars();
     }
   }, [classes]);
 
@@ -120,20 +118,6 @@ export default function ExploreScreen() {
     } catch (error) {
       console.error('Error fetching participant counts:', error);
     }
-  };
-
-  const preloadTeacherAvatars = async () => {
-    const teachers = classes
-      .map(cls => ({
-        id: cls.teacher_id,
-        full_name: cls.profiles?.full_name || 'Unknown Teacher',
-        avatar_url: cls.profiles?.avatar_url
-      }))
-      .filter((teacher, index, self) => 
-        index === self.findIndex(t => t.id === teacher.id)
-      );
-
-    await AvatarService.preloadAvatars(teachers);
   };
 
   const applyFilters = () => {
@@ -356,62 +340,76 @@ export default function ExploreScreen() {
                   onPress={() => handleClassPress(yogaClass.id)}
                   disabled={isFull}
                 >
-                  <View style={styles.classHeader}>
-                    <View style={styles.classHeaderLeft}>
-                      <Text style={styles.classTitle}>{yogaClass.title}</Text>
-                      <Text style={styles.classType}>{yogaClass.type}</Text>
-                    </View>
-                    <View style={[
-                      styles.levelBadge,
-                      isFull && styles.levelBadgeDisabled
-                    ]}>
-                      <Text style={styles.levelText}>{yogaClass.level}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.teacherInfo}>
-                    <TeacherAvatar
-                      teacherId={yogaClass.teacher_id}
-                      teacherName={teacherName}
-                      avatarUrl={yogaClass.profiles?.avatar_url}
-                      size="SMALL"
+                  {/* Class Image */}
+                  <View style={styles.imageContainer}>
+                    <Image
+                      source={{ 
+                        uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+                      }}
+                      style={styles.classImage}
+                      resizeMode="cover"
                     />
-                    <Text style={styles.teacherName}>
-                      {teacherName}
-                    </Text>
+                    {isFull && (
+                      <View style={styles.fullOverlay}>
+                        <Text style={styles.fullOverlayText}>Class Full</Text>
+                      </View>
+                    )}
                   </View>
 
-                  <View style={styles.classDetails}>
-                    <View style={styles.detailItem}>
-                      <Calendar size={16} color="#666" />
-                      <Text style={styles.detailText}>{formatDate(yogaClass.date)}</Text>
-                    </View>
-                    
-                    <View style={styles.detailItem}>
-                      <Clock size={16} color="#666" />
-                      <Text style={styles.detailText}>
-                        {formatTime(yogaClass.time)} ({yogaClass.duration}min)
+                  <View style={styles.cardContent}>
+                    {/* Teacher Info */}
+                    <View style={styles.teacherInfo}>
+                      <View style={styles.teacherAvatar}>
+                        <User size={16} color="white" />
+                      </View>
+                      <Text style={styles.teacherName}>
+                        {teacherName}
                       </Text>
                     </View>
-                    
-                    <View style={styles.detailItem}>
-                      {isOnline ? (
-                        <Globe size={16} color="#4CAF50" />
-                      ) : (
-                        <MapPin size={16} color="#666" />
-                      )}
-                      <Text style={[
-                        styles.detailText,
-                        isOnline && styles.onlineText
+
+                    <View style={styles.classHeader}>
+                      <View style={styles.classHeaderLeft}>
+                        <Text style={styles.classTitle}>{yogaClass.title}</Text>
+                        <Text style={styles.classType}>{yogaClass.type}</Text>
+                      </View>
+                      <View style={[
+                        styles.levelBadge,
+                        isFull && styles.levelBadgeDisabled
                       ]}>
-                        {isOnline ? 'Online Class' : yogaClass.location}
-                      </Text>
+                        <Text style={styles.levelText}>{yogaClass.level}</Text>
+                      </View>
                     </View>
-                  </View>
 
-                  <View style={styles.classFooter}>
-                    <Text style={styles.priceText}>${yogaClass.price}</Text>
-                    <View style={styles.participantsInfo}>
+                    <View style={styles.classDetails}>
+                      <View style={styles.detailItem}>
+                        <Calendar size={14} color="#666" />
+                        <Text style={styles.detailText}>{formatDate(yogaClass.date)}</Text>
+                      </View>
+                      
+                      <View style={styles.detailItem}>
+                        <Clock size={14} color="#666" />
+                        <Text style={styles.detailText}>
+                          {formatTime(yogaClass.time)} • {yogaClass.duration}min
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.detailItem}>
+                        {isOnline ? (
+                          <Globe size={14} color="#4CAF50" />
+                        ) : (
+                          <MapPin size={14} color="#666" />
+                        )}
+                        <Text style={[
+                          styles.detailText,
+                          isOnline && styles.onlineText
+                        ]}>
+                          {isOnline ? 'Online' : yogaClass.location}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.classFooter}>
+                      <Text style={styles.priceText}>${yogaClass.price}</Text>
                       <Text style={[
                         styles.participantsText,
                         isFull && styles.fullText
@@ -421,12 +419,6 @@ export default function ExploreScreen() {
                       </Text>
                     </View>
                   </View>
-
-                  {isFull && (
-                    <View style={styles.fullOverlay}>
-                      <Text style={styles.fullOverlayText}>Class Full</Text>
-                    </View>
-                  )}
                 </TouchableOpacity>
               );
             })}
@@ -547,17 +539,65 @@ const styles = StyleSheet.create({
   classCard: {
     backgroundColor: 'white',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 2,
+    marginBottom: 20,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    position: 'relative',
+    shadowRadius: 8,
+    overflow: 'hidden',
   },
   classCardDisabled: {
     opacity: 0.7,
+  },
+  imageContainer: {
+    position: 'relative',
+    height: 200,
+  },
+  classImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fullOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullOverlayText: {
+    fontSize: 18,
+    color: 'white',
+    fontWeight: '600',
+    backgroundColor: 'rgba(255, 107, 107, 0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  cardContent: {
+    padding: 16,
+  },
+  teacherInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  teacherAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#C4896F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  teacherName: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
   classHeader: {
     flexDirection: 'row',
@@ -570,7 +610,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   classTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#333',
     marginBottom: 4,
@@ -595,17 +635,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textTransform: 'capitalize',
   },
-  teacherInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  teacherName: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-    marginLeft: 8,
-  },
   classDetails: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -615,7 +644,7 @@ const styles = StyleSheet.create({
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   detailText: {
     fontSize: 12,
@@ -631,12 +660,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   priceText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#C4896F',
-  },
-  participantsInfo: {
-    alignItems: 'flex-end',
   },
   participantsText: {
     fontSize: 12,
@@ -645,26 +671,6 @@ const styles = StyleSheet.create({
   fullText: {
     color: '#FF6B6B',
     fontWeight: '500',
-  },
-  fullOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fullOverlayText: {
-    fontSize: 16,
-    color: '#FF6B6B',
-    fontWeight: '600',
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
   },
   emptyState: {
     padding: 40,
