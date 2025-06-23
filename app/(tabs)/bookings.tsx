@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, MapPin, X, CreditCard, AlertCircle } from 'lucide-react-native';
+import { Calendar, Clock, MapPin, X, CreditCard, CircleAlert as AlertCircle } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
