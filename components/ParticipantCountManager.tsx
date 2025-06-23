@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react-native';
+import { RefreshCw, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle } from 'lucide-react-native';
 
 interface ParticipantCountManagerProps {
   classId?: string;
