@@ -54,12 +54,13 @@ export default function ClassesScreen() {
     try {
       const classIds = classes.map(cls => cls.id);
       
-      // Get actual participant counts from bookings
+      // Get actual participant counts from bookings (only confirmed bookings with completed payments)
       const { data, error } = await supabase
         .from('bookings')
         .select('class_id')
         .in('class_id', classIds)
-        .eq('status', 'confirmed');
+        .eq('status', 'confirmed')
+        .eq('payment_status', 'completed');
 
       if (error) throw error;
 
@@ -152,33 +153,22 @@ export default function ClassesScreen() {
         return;
       }
 
+      // Create booking with pending payment status
       const { error } = await supabase
         .from('bookings')
         .insert([{
           student_id: profile.id,
           class_id: classId,
           status: 'confirmed',
+          payment_status: 'pending', // Default to pending payment
         }]);
 
       if (error) throw error;
 
-      // Update participant count in database
-      const newCount = currentCount + 1;
-      await supabase
-        .from('yoga_classes')
-        .update({ current_participants: newCount })
-        .eq('id', classId);
-
-      // Update local state
-      setParticipantCounts(prev => ({
-        ...prev,
-        [classId]: newCount
-      }));
-
       fetchClasses();
       Alert.alert(
-        'Success', 
-        `Class booked successfully! (${newCount} participants enrolled)`,
+        'Booking Created', 
+        'Your booking has been created with pending payment status. Please complete payment to secure your spot.',
         [
           { text: 'View Details', onPress: () => router.push(`/class-detail/${classId}`) },
           { text: 'OK' }

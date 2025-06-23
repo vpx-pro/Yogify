@@ -53,6 +53,8 @@ export type Database = {
           level: 'beginner' | 'intermediate' | 'advanced';
           type: string;
           location: string;
+          meeting_link?: string;
+          image_url?: string;
           created_at: string;
           updated_at: string;
         };
@@ -68,6 +70,8 @@ export type Database = {
           level: 'beginner' | 'intermediate' | 'advanced';
           type: string;
           location: string;
+          meeting_link?: string;
+          image_url?: string;
         };
         Update: {
           title?: string;
@@ -81,6 +85,8 @@ export type Database = {
           level?: 'beginner' | 'intermediate' | 'advanced';
           type?: string;
           location?: string;
+          meeting_link?: string;
+          image_url?: string;
           updated_at?: string;
         };
       };
@@ -91,16 +97,30 @@ export type Database = {
           class_id: string;
           booking_date: string;
           status: 'confirmed' | 'cancelled';
+          payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           student_id: string;
           class_id: string;
           status: 'confirmed' | 'cancelled';
+          payment_status?: 'pending' | 'completed' | 'failed' | 'refunded';
         };
         Update: {
           status?: 'confirmed' | 'cancelled';
+          payment_status?: 'pending' | 'completed' | 'failed' | 'refunded';
+          updated_at?: string;
         };
+      };
+    };
+    Functions: {
+      update_booking_payment_status: {
+        Args: {
+          booking_id: string;
+          new_payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
+        };
+        Returns: boolean;
       };
     };
   };
