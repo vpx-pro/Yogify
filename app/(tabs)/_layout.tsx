@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Calendar, User, BookOpen } from 'lucide-react-native';
+import { Chrome as Home, Calendar, User, BookOpen, Search } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Platform } from 'react-native';
 
@@ -53,15 +53,26 @@ export default function TabLayout() {
         }}
       />
       {!isTeacher && (
-        <Tabs.Screen
-          name="bookings"
-          options={{
-            title: 'My Bookings',
-            tabBarIcon: ({ size, color }) => (
-              <BookOpen size={size} color={color} />
-            ),
-          }}
-        />
+        <>
+          <Tabs.Screen
+            name="explore"
+            options={{
+              title: 'Explore',
+              tabBarIcon: ({ size, color }) => (
+                <Search size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="bookings"
+            options={{
+              title: 'My Bookings',
+              tabBarIcon: ({ size, color }) => (
+                <BookOpen size={size} color={color} />
+              ),
+            }}
+          />
+        </>
       )}
       <Tabs.Screen
         name="profile"
