@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Ale
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Plus, Calendar, Clock, Users, MapPin, CreditCard as Edit, Trash2 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import CreateClassModal from '@/components/CreateClassModal';
 import type { Database } from '@/lib/supabase';
 
@@ -10,16 +11,24 @@ type YogaClass = Database['public']['Tables']['yoga_classes']['Row'];
 
 export default function ClassesScreen() {
   const { profile } = useAuth();
+  const router = useRouter();
   const [classes, setClasses] = useState<YogaClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
 
   const isTeacher = profile?.role === 'teacher';
 
   useEffect(() => {
     fetchClasses();
   }, []);
+
+  useEffect(() => {
+    if (classes.length > 0) {
+      fetchParticipantCounts();
+    }
+  }, [classes]);
 
   const fetchClasses = async () => {
     try {
@@ -38,6 +47,53 @@ export default function ClassesScreen() {
       Alert.alert('Error', 'Failed to load classes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchParticipantCounts = async () => {
+    try {
+      const classIds = classes.map(cls => cls.id);
+      
+      // Get actual participant counts from bookings
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('class_id')
+        .in('class_id', classIds)
+        .eq('status', 'confirmed');
+
+      if (error) throw error;
+
+      // Count participants per class
+      const counts: Record<string, number> = {};
+      classIds.forEach(id => counts[id] = 0);
+      
+      data?.forEach(booking => {
+        counts[booking.class_id] = (counts[booking.class_id] || 0) + 1;
+      });
+
+      setParticipantCounts(counts);
+
+      // Update any classes where the stored count doesn't match actual count
+      const updates = classes
+        .filter(cls => counts[cls.id] !== cls.current_participants)
+        .map(cls => ({
+          id: cls.id,
+          current_participants: counts[cls.id]
+        }));
+
+      if (updates.length > 0) {
+        for (const update of updates) {
+          await supabase
+            .from('yoga_classes')
+            .update({ current_participants: update.current_participants })
+            .eq('id', update.id);
+        }
+        
+        // Refresh classes to get updated data
+        fetchClasses();
+      }
+    } catch (error) {
+      console.error('Error fetching participant counts:', error);
     }
   };
 
@@ -85,6 +141,17 @@ export default function ClassesScreen() {
         return;
       }
 
+      // Get current participant count
+      const currentCount = participantCounts[classId] || 0;
+      const targetClass = classes.find(c => c.id === classId);
+      
+      if (!targetClass) return;
+
+      if (currentCount >= targetClass.max_participants) {
+        Alert.alert('Class Full', 'This class is already full.');
+        return;
+      }
+
       const { error } = await supabase
         .from('bookings')
         .insert([{
@@ -95,17 +162,28 @@ export default function ClassesScreen() {
 
       if (error) throw error;
 
-      // Update class participant count
-      const targetClass = classes.find(c => c.id === classId);
-      if (targetClass) {
-        await supabase
-          .from('yoga_classes')
-          .update({ current_participants: targetClass.current_participants + 1 })
-          .eq('id', classId);
-      }
+      // Update participant count in database
+      const newCount = currentCount + 1;
+      await supabase
+        .from('yoga_classes')
+        .update({ current_participants: newCount })
+        .eq('id', classId);
+
+      // Update local state
+      setParticipantCounts(prev => ({
+        ...prev,
+        [classId]: newCount
+      }));
 
       fetchClasses();
-      Alert.alert('Success', 'Class booked successfully!');
+      Alert.alert(
+        'Success', 
+        `Class booked successfully! (${newCount} participants enrolled)`,
+        [
+          { text: 'View Details', onPress: () => router.push(`/class-detail/${classId}`) },
+          { text: 'OK' }
+        ]
+      );
     } catch (error) {
       console.error('Error booking class:', error);
       Alert.alert('Error', 'Failed to book class. Please try again.');
@@ -163,12 +241,17 @@ export default function ClassesScreen() {
   };
 
   const isClassFull = (yogaClass: YogaClass) => {
-    return yogaClass.current_participants >= yogaClass.max_participants;
+    const actualCount = participantCounts[yogaClass.id] || yogaClass.current_participants;
+    return actualCount >= yogaClass.max_participants;
   };
 
   const isClassPast = (dateString: string, timeString: string) => {
     const classDateTime = new Date(`${dateString} ${timeString}`);
     return classDateTime < new Date();
+  };
+
+  const getParticipantCount = (yogaClass: YogaClass) => {
+    return participantCounts[yogaClass.id] ?? yogaClass.current_participants;
   };
 
   return (
@@ -198,12 +281,17 @@ export default function ClassesScreen() {
           classes.map((yogaClass) => {
             const isPast = isClassPast(yogaClass.date, yogaClass.time);
             const isFull = isClassFull(yogaClass);
+            const participantCount = getParticipantCount(yogaClass);
             
             return (
-              <View key={yogaClass.id} style={[
-                styles.classCard,
-                isPast && styles.pastClassCard
-              ]}>
+              <TouchableOpacity
+                key={yogaClass.id}
+                style={[
+                  styles.classCard,
+                  isPast && styles.pastClassCard
+                ]}
+                onPress={() => router.push(`/class-detail/${yogaClass.id}`)}
+              >
                 <View style={styles.classHeader}>
                   <Text style={styles.classTitle}>{yogaClass.title}</Text>
                   <View style={[
@@ -241,7 +329,7 @@ export default function ClassesScreen() {
                       styles.detailText,
                       isFull && styles.fullText
                     ]}>
-                      {yogaClass.current_participants}/{yogaClass.max_participants}
+                      {participantCount}/{yogaClass.max_participants}
                       {isFull && ' (Full)'}
                     </Text>
                   </View>
@@ -287,7 +375,7 @@ export default function ClassesScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })
         ) : (

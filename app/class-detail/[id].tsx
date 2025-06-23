@@ -33,6 +33,7 @@ export default function ClassDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [existingBooking, setExistingBooking] = useState<Booking | null>(null);
+  const [actualParticipantCount, setActualParticipantCount] = useState(0);
 
   // Ensure id is a valid string
   const id = typeof params.id === 'string' ? params.id : null;
@@ -41,6 +42,7 @@ export default function ClassDetailScreen() {
     if (id) {
       fetchClassDetails();
       checkExistingBooking();
+      fetchActualParticipantCount();
     } else {
       setLoading(false);
     }
@@ -73,6 +75,24 @@ export default function ClassDetailScreen() {
     }
   };
 
+  const fetchActualParticipantCount = async () => {
+    if (!id) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('class_id', id)
+        .eq('status', 'confirmed');
+
+      if (error) throw error;
+      setActualParticipantCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching participant count:', error);
+      setActualParticipantCount(0);
+    }
+  };
+
   const checkExistingBooking = async () => {
     if (!profile?.id || !id) return;
 
@@ -93,11 +113,47 @@ export default function ClassDetailScreen() {
     }
   };
 
+  const syncParticipantCount = async () => {
+    if (!id || !yogaClass) return;
+
+    try {
+      // Get actual count from bookings
+      const { count, error: countError } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('class_id', id)
+        .eq('status', 'confirmed');
+
+      if (countError) throw countError;
+
+      const actualCount = count || 0;
+      setActualParticipantCount(actualCount);
+
+      // Update the yoga_classes table if there's a discrepancy
+      if (actualCount !== yogaClass.current_participants) {
+        const { error: updateError } = await supabase
+          .from('yoga_classes')
+          .update({ current_participants: actualCount })
+          .eq('id', id);
+
+        if (updateError) throw updateError;
+
+        // Update local state
+        setYogaClass(prev => prev ? {
+          ...prev,
+          current_participants: actualCount
+        } : null);
+      }
+    } catch (error) {
+      console.error('Error syncing participant count:', error);
+    }
+  };
+
   const handleBookClass = async () => {
     if (!profile?.id || !yogaClass) return;
 
-    // Check if class is full
-    if (yogaClass.current_participants >= yogaClass.max_participants) {
+    // Check if class is full based on actual count
+    if (actualParticipantCount >= yogaClass.max_participants) {
       Alert.alert('Class Full', 'This class is already full.');
       return;
     }
@@ -121,35 +177,44 @@ export default function ClassDetailScreen() {
 
       if (bookingError) throw bookingError;
 
-      // Update class participant count
+      // Calculate new participant count
+      const newParticipantCount = actualParticipantCount + 1;
+
+      // Update class participant count in database
       const { error: updateError } = await supabase
         .from('yoga_classes')
         .update({ 
-          current_participants: yogaClass.current_participants + 1 
+          current_participants: newParticipantCount 
         })
         .eq('id', yogaClass.id);
 
       if (updateError) throw updateError;
 
-      // Update local state
+      // Update local state immediately
+      setActualParticipantCount(newParticipantCount);
       setYogaClass(prev => prev ? {
         ...prev,
-        current_participants: prev.current_participants + 1
+        current_participants: newParticipantCount
       } : null);
 
       // Refresh booking status
-      checkExistingBooking();
+      await checkExistingBooking();
 
+      // Show success message with participant count
       Alert.alert(
         'Booking Confirmed!', 
-        'Your class has been booked successfully. You can view it in your bookings.',
+        `You are booked for this class (${newParticipantCount} participants enrolled)`,
         [
+          { text: 'View My Bookings', onPress: () => router.push('/(tabs)/bookings') },
           { text: 'OK', onPress: () => router.back() }
         ]
       );
     } catch (error) {
       console.error('Error booking class:', error);
       Alert.alert('Booking Failed', 'Failed to book the class. Please try again.');
+      
+      // Refresh participant count in case of error
+      await fetchActualParticipantCount();
     } finally {
       setBooking(false);
     }
@@ -185,7 +250,7 @@ export default function ClassDetailScreen() {
   };
 
   const isClassFull = () => {
-    return yogaClass ? yogaClass.current_participants >= yogaClass.max_participants : false;
+    return actualParticipantCount >= (yogaClass?.max_participants || 0);
   };
 
   const isClassPast = () => {
@@ -197,6 +262,13 @@ export default function ClassDetailScreen() {
   const isOnline = () => {
     return yogaClass?.location.toLowerCase() === 'online';
   };
+
+  // Sync participant count when component mounts or when returning from background
+  useEffect(() => {
+    if (yogaClass) {
+      syncParticipantCount();
+    }
+  }, [yogaClass]);
 
   if (loading) {
     return (
@@ -328,13 +400,21 @@ export default function ClassDetailScreen() {
             <Users size={20} color="#C4896F" />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Participants</Text>
-              <Text style={[
-                styles.detailValue,
-                classFull && styles.fullText
-              ]}>
-                {yogaClass.current_participants} / {yogaClass.max_participants}
-                {classFull && ' (Full)'}
-              </Text>
+              <View style={styles.participantInfo}>
+                <Text style={[
+                  styles.detailValue,
+                  classFull && styles.fullText
+                ]}>
+                  {actualParticipantCount} / {yogaClass.max_participants}
+                  {classFull && ' (Full)'}
+                </Text>
+                <View style={styles.participantIndicator}>
+                  <View style={[
+                    styles.participantBar,
+                    { width: `${Math.min((actualParticipantCount / yogaClass.max_participants) * 100, 100)}%` }
+                  ]} />
+                </View>
+              </View>
             </View>
           </View>
 
@@ -359,7 +439,12 @@ export default function ClassDetailScreen() {
         {existingBooking && (
           <View style={styles.bookingStatus}>
             <CheckCircle size={20} color="#4CAF50" />
-            <Text style={styles.bookingStatusText}>You're booked for this class!</Text>
+            <View style={styles.bookingStatusContent}>
+              <Text style={styles.bookingStatusText}>You're booked for this class!</Text>
+              <Text style={styles.participantCountText}>
+                {actualParticipantCount} participants enrolled
+              </Text>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -388,6 +473,11 @@ export default function ClassDetailScreen() {
               </Text>
             )}
           </TouchableOpacity>
+          {!existingBooking && !classFull && (
+            <Text style={styles.spotsLeftText}>
+              {yogaClass.max_participants - actualParticipantCount} spots left
+            </Text>
+          )}
         </View>
       )}
     </SafeAreaView>
@@ -424,7 +514,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 140,
   },
   loadingContainer: {
     flex: 1,
@@ -558,6 +648,21 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
   },
+  participantInfo: {
+    flex: 1,
+  },
+  participantIndicator: {
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  participantBar: {
+    height: '100%',
+    backgroundColor: '#C4896F',
+    borderRadius: 2,
+  },
   onlineText: {
     color: '#4CAF50',
   },
@@ -601,10 +706,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  bookingStatusContent: {
+    flex: 1,
+  },
   bookingStatusText: {
     fontSize: 16,
     color: '#4CAF50',
     fontWeight: '600',
+    marginBottom: 2,
+  },
+  participantCountText: {
+    fontSize: 14,
+    color: '#4CAF50',
+    opacity: 0.8,
   },
   bookingSection: {
     position: 'absolute',
@@ -632,5 +746,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
     fontWeight: '600',
+  },
+  spotsLeftText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

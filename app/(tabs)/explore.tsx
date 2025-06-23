@@ -40,6 +40,7 @@ export default function ExploreScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
   const [filters, setFilters] = useState<FilterState>({
     type: 'All',
     level: 'All',
@@ -55,6 +56,12 @@ export default function ExploreScreen() {
   useEffect(() => {
     applyFilters();
   }, [classes, filters]);
+
+  useEffect(() => {
+    if (classes.length > 0) {
+      fetchParticipantCounts();
+    }
+  }, [classes]);
 
   const fetchClasses = async () => {
     try {
@@ -82,6 +89,33 @@ export default function ExploreScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const fetchParticipantCounts = async () => {
+    try {
+      const classIds = classes.map(cls => cls.id);
+      
+      // Get actual participant counts from bookings
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('class_id')
+        .in('class_id', classIds)
+        .eq('status', 'confirmed');
+
+      if (error) throw error;
+
+      // Count participants per class
+      const counts: Record<string, number> = {};
+      classIds.forEach(id => counts[id] = 0);
+      
+      data?.forEach(booking => {
+        counts[booking.class_id] = (counts[booking.class_id] || 0) + 1;
+      });
+
+      setParticipantCounts(counts);
+    } catch (error) {
+      console.error('Error fetching participant counts:', error);
     }
   };
 
@@ -165,7 +199,12 @@ export default function ExploreScreen() {
   };
 
   const isClassFull = (yogaClass: YogaClass) => {
-    return yogaClass.current_participants >= yogaClass.max_participants;
+    const actualCount = participantCounts[yogaClass.id] || yogaClass.current_participants;
+    return actualCount >= yogaClass.max_participants;
+  };
+
+  const getParticipantCount = (yogaClass: YogaClass) => {
+    return participantCounts[yogaClass.id] ?? yogaClass.current_participants;
   };
 
   const handleClassPress = (classId: string) => {
@@ -290,6 +329,7 @@ export default function ExploreScreen() {
             {filteredClasses.map((yogaClass) => {
               const isFull = isClassFull(yogaClass);
               const isOnline = yogaClass.location.toLowerCase() === 'online';
+              const participantCount = getParticipantCount(yogaClass);
               
               return (
                 <TouchableOpacity
@@ -355,7 +395,7 @@ export default function ExploreScreen() {
                         styles.participantsText,
                         isFull && styles.fullText
                       ]}>
-                        {yogaClass.current_participants}/{yogaClass.max_participants}
+                        {participantCount}/{yogaClass.max_participants}
                         {isFull && ' (Full)'}
                       </Text>
                     </View>
