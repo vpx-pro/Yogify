@@ -104,13 +104,19 @@ export default function ClassDetailScreen() {
         .eq('student_id', profile.id)
         .eq('class_id', id)
         .eq('status', 'confirmed')
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to avoid error when no booking exists
+
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 is "no rows returned" which is expected when no booking exists
+        throw error;
+      }
 
       if (data) {
         setExistingBooking(data);
       }
     } catch (error) {
-      // No existing booking found, which is fine
+      console.error('Error checking existing booking:', error);
+      // Don't show error to user as this is just a check
     }
   };
 
@@ -131,17 +137,47 @@ export default function ClassDetailScreen() {
 
     setBooking(true);
     try {
-      // Insert booking
-      const { error: bookingError } = await supabase
+      // Double-check for existing booking right before inserting
+      const { data: existingCheck, error: checkError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('student_id', profile.id)
+        .eq('class_id', yogaClass.id)
+        .eq('status', 'confirmed')
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      if (existingCheck) {
+        Alert.alert('Already Booked', 'You have already booked this class.');
+        setExistingBooking(existingCheck as Booking);
+        return;
+      }
+
+      // Insert booking with error handling for unique constraint
+      const { data: newBooking, error: bookingError } = await supabase
         .from('bookings')
         .insert([{
           student_id: profile.id,
           class_id: yogaClass.id,
           status: 'confirmed',
           payment_status: 'pending',
-        }]);
+        }])
+        .select()
+        .single();
 
-      if (bookingError) throw bookingError;
+      if (bookingError) {
+        // Handle specific unique constraint violation
+        if (bookingError.code === '23505') {
+          Alert.alert('Already Booked', 'You have already booked this class.');
+          // Refresh the existing booking state
+          await checkExistingBooking();
+          return;
+        }
+        throw bookingError;
+      }
 
       // Calculate new participant count
       const newParticipantCount = actualParticipantCount + 1;
@@ -154,7 +190,10 @@ export default function ClassDetailScreen() {
         })
         .eq('id', yogaClass.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating participant count:', updateError);
+        // Don't throw here as the booking was successful
+      }
 
       // Update local state immediately
       setActualParticipantCount(newParticipantCount);
@@ -163,17 +202,37 @@ export default function ClassDetailScreen() {
         current_participants: newParticipantCount
       } : null);
 
-      // Refresh booking status
-      await checkExistingBooking();
+      // Set the new booking
+      setExistingBooking(newBooking);
 
       // Navigate to booking confirmation
       router.push('/booking-confirmation');
     } catch (error) {
       console.error('Error booking class:', error);
-      Alert.alert('Booking Failed', 'Failed to book the class. Please try again.');
       
-      // Refresh participant count in case of error
-      await fetchActualParticipantCount();
+      // Provide more specific error messages
+      let errorMessage = 'Failed to book the class. Please try again.';
+      
+      if (error && typeof error === 'object' && 'code' in error) {
+        switch (error.code) {
+          case '23505':
+            errorMessage = 'You have already booked this class.';
+            break;
+          case 'PGRST301':
+            errorMessage = 'Class not found or no longer available.';
+            break;
+          default:
+            errorMessage = 'Failed to book the class. Please try again.';
+        }
+      }
+      
+      Alert.alert('Booking Failed', errorMessage);
+      
+      // Refresh data to ensure UI is in sync
+      await Promise.all([
+        fetchActualParticipantCount(),
+        checkExistingBooking()
+      ]);
     } finally {
       setBooking(false);
     }
