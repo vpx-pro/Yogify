@@ -136,6 +136,42 @@ export default function ClassDetailScreen() {
 
     setBooking(true);
     try {
+      // First check if we can book this class
+      const { data: canBookData, error: canBookError } = await supabase.rpc('can_student_book_class', {
+        p_student_id: profile.id,
+        p_class_id: yogaClass.id
+      });
+
+      if (canBookError) throw canBookError;
+
+      if (!canBookData.can_book) {
+        let alertTitle = 'Cannot Book Class';
+        let alertMessage = canBookData.message || 'Unable to book this class.';
+
+        switch (canBookData.reason) {
+          case 'already_booked':
+            alertTitle = 'Already Booked';
+            alertMessage = 'You have already booked this class.';
+            await checkExistingBooking();
+            break;
+          case 'class_full':
+            alertTitle = 'Class Full';
+            alertMessage = 'This class is now full. Please try another class.';
+            await fetchActualParticipantCount();
+            break;
+          case 'class_past':
+            alertTitle = 'Class Unavailable';
+            alertMessage = 'This class has already started or ended.';
+            break;
+          default:
+            alertTitle = 'Booking Failed';
+            break;
+        }
+
+        Alert.alert(alertTitle, alertMessage);
+        return;
+      }
+
       // Use the secure booking function that handles participant count management
       const { data, error } = await supabase.rpc('create_booking_with_count', {
         p_student_id: profile.id,
@@ -157,6 +193,13 @@ export default function ClassDetailScreen() {
         } else if (error.message.includes('Cannot book past classes')) {
           Alert.alert('Class Unavailable', 'This class has already started or ended.');
           return;
+        } else if (error.message.includes('duplicate key value violates unique constraint')) {
+          Alert.alert('Already Booked', 'You have already booked this class.');
+          await checkExistingBooking();
+          return;
+        } else if (error.message.includes('Booking system is busy')) {
+          Alert.alert('System Busy', 'The booking system is currently busy. Please try again in a moment.');
+          return;
         }
         throw error;
       }
@@ -176,12 +219,16 @@ export default function ClassDetailScreen() {
       let errorMessage = 'Failed to book the class. Please try again.';
       
       if (error && typeof error === 'object' && 'message' in error) {
-        if (error.message.includes('already has a booking')) {
+        if (error.message.includes('duplicate key value violates unique constraint')) {
+          errorMessage = 'You have already booked this class.';
+        } else if (error.message.includes('already has a booking')) {
           errorMessage = 'You have already booked this class.';
         } else if (error.message.includes('Class is full')) {
           errorMessage = 'This class is now full. Please try another class.';
         } else if (error.message.includes('Cannot book past classes')) {
           errorMessage = 'This class has already started or ended.';
+        } else if (error.message.includes('Booking system is busy')) {
+          errorMessage = 'The booking system is currently busy. Please try again in a moment.';
         }
       }
       

@@ -17,6 +17,7 @@ export default function ClassesScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
+  const [bookingStates, setBookingStates] = useState<Record<string, boolean>>({});
 
   const isTeacher = profile?.role === 'teacher';
 
@@ -120,7 +121,32 @@ export default function ClassesScreen() {
   const bookClass = async (classId: string) => {
     if (!profile?.id) return;
 
+    // Prevent multiple simultaneous booking attempts
+    if (bookingStates[classId]) {
+      return;
+    }
+
+    setBookingStates(prev => ({ ...prev, [classId]: true }));
+
     try {
+      // First check if already booked to provide immediate feedback
+      const { data: existingBooking, error: checkError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('student_id', profile.id)
+        .eq('class_id', classId)
+        .eq('status', 'confirmed')
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      if (existingBooking) {
+        Alert.alert('Already Booked', 'You have already booked this class.');
+        return;
+      }
+
       // Use the secure booking function that handles participant count management
       const { error } = await supabase.rpc('create_booking_with_count', {
         p_student_id: profile.id,
@@ -136,6 +162,8 @@ export default function ClassesScreen() {
           Alert.alert('Class Full', 'This class is now full. Please try another class.');
         } else if (error.message.includes('Cannot book past classes')) {
           Alert.alert('Class Unavailable', 'This class has already started or ended.');
+        } else if (error.message.includes('duplicate key value violates unique constraint')) {
+          Alert.alert('Already Booked', 'You have already booked this class.');
         } else {
           throw error;
         }
@@ -153,7 +181,24 @@ export default function ClassesScreen() {
       );
     } catch (error) {
       console.error('Error booking class:', error);
-      Alert.alert('Error', 'Failed to book class. Please try again.');
+      
+      let errorMessage = 'Failed to book class. Please try again.';
+      
+      if (error && typeof error === 'object' && 'message' in error) {
+        if (error.message.includes('duplicate key value violates unique constraint')) {
+          errorMessage = 'You have already booked this class.';
+        } else if (error.message.includes('already has a booking')) {
+          errorMessage = 'You have already booked this class.';
+        } else if (error.message.includes('Class is full')) {
+          errorMessage = 'This class is now full. Please try another class.';
+        } else if (error.message.includes('Cannot book past classes')) {
+          errorMessage = 'This class has already started or ended.';
+        }
+      }
+      
+      Alert.alert('Booking Failed', errorMessage);
+    } finally {
+      setBookingStates(prev => ({ ...prev, [classId]: false }));
     }
   };
 
@@ -249,6 +294,7 @@ export default function ClassesScreen() {
             const isPast = isClassPast(yogaClass.date, yogaClass.time);
             const isFull = isClassFull(yogaClass);
             const participantCount = getParticipantCount(yogaClass);
+            const isBooking = bookingStates[yogaClass.id] || false;
             
             return (
               <TouchableOpacity
@@ -331,13 +377,13 @@ export default function ClassesScreen() {
                     <TouchableOpacity
                       style={[
                         styles.actionButton,
-                        (isFull || isPast) && styles.disabledButton
+                        (isFull || isPast || isBooking) && styles.disabledButton
                       ]}
                       onPress={() => bookClass(yogaClass.id)}
-                      disabled={isFull || isPast}
+                      disabled={isFull || isPast || isBooking}
                     >
                       <Text style={styles.actionButtonText}>
-                        {isPast ? 'Past' : isFull ? 'Full' : 'Book Now'}
+                        {isBooking ? 'Booking...' : isPast ? 'Past' : isFull ? 'Full' : 'Book Now'}
                       </Text>
                     </TouchableOpacity>
                   )}
