@@ -41,7 +41,7 @@ export default function BookingsScreen() {
     }
   };
 
-  const cancelBooking = async (bookingId: string, classId: string) => {
+  const cancelBooking = async (bookingId: string) => {
     Alert.alert(
       'Cancel Booking',
       'Are you sure you want to cancel this booking?',
@@ -52,31 +52,26 @@ export default function BookingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Update booking status
-              const { error: bookingError } = await supabase
-                .from('bookings')
-                .update({ status: 'cancelled' })
-                .eq('id', bookingId);
+              // Use the secure cancellation function that handles participant count management
+              const { error } = await supabase.rpc('cancel_booking_with_count', {
+                p_booking_id: bookingId,
+                p_student_id: profile!.id
+              });
 
-              if (bookingError) throw bookingError;
-
-              // Decrease class participant count only if payment was completed
-              const targetBooking = bookings.find(b => b.id === bookingId);
-              if (targetBooking && targetBooking.payment_status === 'completed') {
-                const targetClass = targetBooking.yoga_classes;
-                if (targetClass) {
-                  await supabase
-                    .from('yoga_classes')
-                    .update({ current_participants: Math.max(0, targetClass.current_participants - 1) })
-                    .eq('id', classId);
+              if (error) {
+                if (error.message.includes('not found or already cancelled')) {
+                  Alert.alert('Error', 'This booking has already been cancelled or does not exist.');
+                } else {
+                  throw error;
                 }
+                return;
               }
 
               fetchBookings();
               Alert.alert('Success', 'Booking cancelled successfully');
             } catch (error) {
               console.error('Error cancelling booking:', error);
-              Alert.alert('Error', 'Failed to cancel booking');
+              Alert.alert('Error', 'Failed to cancel booking. Please try again.');
             }
           },
         },
@@ -103,17 +98,6 @@ export default function BookingsScreen() {
                 });
 
                 if (error) throw error;
-
-                // Update participant count
-                const booking = bookings.find(b => b.id === bookingId);
-                if (booking) {
-                  await supabase
-                    .from('yoga_classes')
-                    .update({ 
-                      current_participants: booking.yoga_classes.current_participants + 1 
-                    })
-                    .eq('id', booking.class_id);
-                }
 
                 fetchBookings();
                 Alert.alert('Success', 'Payment completed successfully!');
@@ -250,7 +234,7 @@ export default function BookingsScreen() {
                 {isUpcoming(booking.yoga_classes.date, booking.yoga_classes.time) && (
                   <TouchableOpacity
                     style={styles.cancelButton}
-                    onPress={() => cancelBooking(booking.id, booking.yoga_classes.id)}
+                    onPress={() => cancelBooking(booking.id)}
                   >
                     <X size={16} color="#FF6B6B" />
                     <Text style={styles.cancelButtonText}>Cancel</Text>

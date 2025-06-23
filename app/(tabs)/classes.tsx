@@ -74,22 +74,15 @@ export default function ClassesScreen() {
 
       setParticipantCounts(counts);
 
-      // Update any classes where the stored count doesn't match actual count
-      const updates = classes
+      // Sync any classes where the stored count doesn't match actual count
+      const syncPromises = classes
         .filter(cls => counts[cls.id] !== cls.current_participants)
-        .map(cls => ({
-          id: cls.id,
-          current_participants: counts[cls.id]
-        }));
+        .map(cls => 
+          supabase.rpc('sync_participant_count', { p_class_id: cls.id })
+        );
 
-      if (updates.length > 0) {
-        for (const update of updates) {
-          await supabase
-            .from('yoga_classes')
-            .update({ current_participants: update.current_participants })
-            .eq('id', update.id);
-        }
-        
+      if (syncPromises.length > 0) {
+        await Promise.all(syncPromises);
         // Refresh classes to get updated data
         fetchClasses();
       }
@@ -128,42 +121,26 @@ export default function ClassesScreen() {
     if (!profile?.id) return;
 
     try {
-      // Check if already booked
-      const { data: existingBooking } = await supabase
-        .from('bookings')
-        .select('id')
-        .eq('student_id', profile.id)
-        .eq('class_id', classId)
-        .eq('status', 'confirmed')
-        .single();
+      // Use the secure booking function that handles participant count management
+      const { error } = await supabase.rpc('create_booking_with_count', {
+        p_student_id: profile.id,
+        p_class_id: classId,
+        p_status: 'confirmed',
+        p_payment_status: 'pending'
+      });
 
-      if (existingBooking) {
-        Alert.alert('Already Booked', 'You have already booked this class.');
+      if (error) {
+        if (error.message.includes('already has a booking')) {
+          Alert.alert('Already Booked', 'You have already booked this class.');
+        } else if (error.message.includes('Class is full')) {
+          Alert.alert('Class Full', 'This class is now full. Please try another class.');
+        } else if (error.message.includes('Cannot book past classes')) {
+          Alert.alert('Class Unavailable', 'This class has already started or ended.');
+        } else {
+          throw error;
+        }
         return;
       }
-
-      // Get current participant count
-      const currentCount = participantCounts[classId] || 0;
-      const targetClass = classes.find(c => c.id === classId);
-      
-      if (!targetClass) return;
-
-      if (currentCount >= targetClass.max_participants) {
-        Alert.alert('Class Full', 'This class is already full.');
-        return;
-      }
-
-      // Create booking with pending payment status
-      const { error } = await supabase
-        .from('bookings')
-        .insert([{
-          student_id: profile.id,
-          class_id: classId,
-          status: 'confirmed',
-          payment_status: 'pending', // Default to pending payment
-        }]);
-
-      if (error) throw error;
 
       fetchClasses();
       Alert.alert(
