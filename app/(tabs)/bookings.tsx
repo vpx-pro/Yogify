@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, MapPin, X } from 'lucide-react-native';
+import { Calendar, Clock, MapPin, X, CreditCard, AlertCircle } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
@@ -60,13 +60,16 @@ export default function BookingsScreen() {
 
               if (bookingError) throw bookingError;
 
-              // Decrease class participant count
-              const targetClass = bookings.find(b => b.id === bookingId)?.yoga_classes;
-              if (targetClass) {
-                await supabase
-                  .from('yoga_classes')
-                  .update({ current_participants: Math.max(0, targetClass.current_participants - 1) })
-                  .eq('id', classId);
+              // Decrease class participant count only if payment was completed
+              const targetBooking = bookings.find(b => b.id === bookingId);
+              if (targetBooking && targetBooking.payment_status === 'completed') {
+                const targetClass = targetBooking.yoga_classes;
+                if (targetClass) {
+                  await supabase
+                    .from('yoga_classes')
+                    .update({ current_participants: Math.max(0, targetClass.current_participants - 1) })
+                    .eq('id', classId);
+                }
               }
 
               fetchBookings();
@@ -81,9 +84,76 @@ export default function BookingsScreen() {
     );
   };
 
+  const handlePayment = async (bookingId: string) => {
+    try {
+      // Simulate payment processing
+      Alert.alert(
+        'Process Payment',
+        'This would integrate with a payment processor like RevenueCat or Stripe.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Simulate Success',
+            onPress: async () => {
+              try {
+                // Update payment status using the secure function
+                const { error } = await supabase.rpc('update_booking_payment_status', {
+                  booking_id: bookingId,
+                  new_payment_status: 'completed'
+                });
+
+                if (error) throw error;
+
+                // Update participant count
+                const booking = bookings.find(b => b.id === bookingId);
+                if (booking) {
+                  await supabase
+                    .from('yoga_classes')
+                    .update({ 
+                      current_participants: booking.yoga_classes.current_participants + 1 
+                    })
+                    .eq('id', booking.class_id);
+                }
+
+                fetchBookings();
+                Alert.alert('Success', 'Payment completed successfully!');
+              } catch (error) {
+                console.error('Error processing payment:', error);
+                Alert.alert('Error', 'Payment failed. Please try again.');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error handling payment:', error);
+      Alert.alert('Error', 'Failed to process payment');
+    }
+  };
+
   const isUpcoming = (date: string, time: string) => {
     const classDateTime = new Date(`${date} ${time}`);
     return classDateTime > new Date();
+  };
+
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return '#4CAF50';
+      case 'pending': return '#FF9800';
+      case 'failed': return '#FF6B6B';
+      case 'refunded': return '#9C27B0';
+      default: return '#666';
+    }
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    switch (status) {
+      case 'completed': return 'Paid';
+      case 'pending': return 'Payment Pending';
+      case 'failed': return 'Payment Failed';
+      case 'refunded': return 'Refunded';
+      default: return status;
+    }
   };
 
   return (
@@ -104,18 +174,20 @@ export default function BookingsScreen() {
             <View key={booking.id} style={styles.bookingCard}>
               <View style={styles.bookingHeader}>
                 <Text style={styles.classTitle}>{booking.yoga_classes.title}</Text>
-                <View style={[
-                  styles.statusBadge,
-                  isUpcoming(booking.yoga_classes.date, booking.yoga_classes.time) 
-                    ? styles.upcomingBadge 
-                    : styles.pastBadge
-                ]}>
-                  <Text style={styles.statusText}>
-                    {isUpcoming(booking.yoga_classes.date, booking.yoga_classes.time) 
-                      ? 'Upcoming' 
-                      : 'Completed'
-                    }
-                  </Text>
+                <View style={styles.statusContainer}>
+                  <View style={[
+                    styles.statusBadge,
+                    isUpcoming(booking.yoga_classes.date, booking.yoga_classes.time) 
+                      ? styles.upcomingBadge 
+                      : styles.pastBadge
+                  ]}>
+                    <Text style={styles.statusText}>
+                      {isUpcoming(booking.yoga_classes.date, booking.yoga_classes.time) 
+                        ? 'Upcoming' 
+                        : 'Completed'
+                      }
+                    </Text>
+                  </View>
                 </View>
               </View>
               
@@ -140,6 +212,37 @@ export default function BookingsScreen() {
                   <MapPin size={16} color="#666" />
                   <Text style={styles.detailText}>{booking.yoga_classes.location}</Text>
                 </View>
+              </View>
+
+              {/* Payment Status */}
+              <View style={styles.paymentSection}>
+                <View style={styles.paymentStatus}>
+                  <CreditCard size={16} color={getPaymentStatusColor(booking.payment_status)} />
+                  <Text style={[
+                    styles.paymentStatusText,
+                    { color: getPaymentStatusColor(booking.payment_status) }
+                  ]}>
+                    {getPaymentStatusText(booking.payment_status)}
+                  </Text>
+                </View>
+                
+                {booking.payment_status === 'pending' && (
+                  <TouchableOpacity
+                    style={styles.payButton}
+                    onPress={() => handlePayment(booking.id)}
+                  >
+                    <Text style={styles.payButtonText}>Pay Now</Text>
+                  </TouchableOpacity>
+                )}
+
+                {booking.payment_status === 'failed' && (
+                  <View style={styles.failedPaymentNotice}>
+                    <AlertCircle size={16} color="#FF6B6B" />
+                    <Text style={styles.failedPaymentText}>
+                      Payment failed. Please try again or contact support.
+                    </Text>
+                  </View>
+                )}
               </View>
               
               <View style={styles.bookingFooter}>
@@ -218,6 +321,10 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
   },
+  statusContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   statusBadge: {
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -254,6 +361,47 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 12,
     color: '#666',
+  },
+  paymentSection: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+  },
+  paymentStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  paymentStatusText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  payButton: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+  },
+  payButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
+  },
+  failedPaymentNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFE5E5',
+    padding: 8,
+    borderRadius: 6,
+  },
+  failedPaymentText: {
+    fontSize: 12,
+    color: '#FF6B6B',
+    flex: 1,
   },
   bookingFooter: {
     flexDirection: 'row',
