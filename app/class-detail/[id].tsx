@@ -370,10 +370,10 @@ export default function ClassDetailScreen() {
           <TouchableOpacity
             style={[
               styles.bookButton,
-              (classFull || existingBooking || booking) && styles.bookButtonDisabled
+              (classFull || !!existingBooking || booking) && styles.bookButtonDisabled
             ]}
             onPress={handleBookClass}
-            disabled={classFull || existingBooking || booking}
+            disabled={classFull || !!existingBooking || booking}
           >
             {booking ? (
               <ActivityIndicator size="small" color="white" />
