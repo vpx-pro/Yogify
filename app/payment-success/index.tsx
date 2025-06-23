@@ -9,7 +9,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CheckCircle, Calendar, Clock, ArrowRight } from 'lucide-react-native';
+import { CircleCheck as CheckCircle, Calendar, Clock, ArrowRight } from 'lucide-react-native';
 
 export default function PaymentSuccessScreen() {
   const router = useRouter();
