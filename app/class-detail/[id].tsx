@@ -26,7 +26,7 @@ type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
 type Booking = Database['public']['Tables']['bookings']['Row'];
 
 export default function ClassDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
   const { profile } = useAuth();
   const router = useRouter();
   const [yogaClass, setYogaClass] = useState<YogaClass | null>(null);
@@ -34,14 +34,21 @@ export default function ClassDetailScreen() {
   const [booking, setBooking] = useState(false);
   const [existingBooking, setExistingBooking] = useState<Booking | null>(null);
 
+  // Ensure id is a valid string
+  const id = typeof params.id === 'string' ? params.id : null;
+
   useEffect(() => {
     if (id) {
       fetchClassDetails();
       checkExistingBooking();
+    } else {
+      setLoading(false);
     }
   }, [id]);
 
   const fetchClassDetails = async () => {
+    if (!id) return;
+    
     try {
       const { data, error } = await supabase
         .from('yoga_classes')
@@ -202,11 +209,13 @@ export default function ClassDetailScreen() {
     );
   }
 
-  if (!yogaClass) {
+  if (!id || !yogaClass) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Class not found.</Text>
+          <Text style={styles.errorText}>
+            {!id ? 'Invalid class ID.' : 'Class not found.'}
+          </Text>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>

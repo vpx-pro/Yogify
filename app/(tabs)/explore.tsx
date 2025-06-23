@@ -33,7 +33,7 @@ const YOGA_TYPES = ['All', 'Hatha', 'Vinyasa', 'Ashtanga', 'Bikram', 'Hot Yoga',
 const LEVELS = ['All', 'beginner', 'intermediate', 'advanced'];
 
 export default function ExploreScreen() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [classes, setClasses] = useState<YogaClass[]>([]);
   const [filteredClasses, setFilteredClasses] = useState<YogaClass[]>([]);
@@ -46,20 +46,11 @@ export default function ExploreScreen() {
     date: 'All'
   });
 
-  // Only show this screen for students
-  if (profile?.role !== 'student') {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>This feature is only available for students.</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   useEffect(() => {
-    fetchClasses();
-  }, []);
+    if (!authLoading && profile?.role === 'student') {
+      fetchClasses();
+    }
+  }, [authLoading, profile]);
 
   useEffect(() => {
     applyFilters();
@@ -210,6 +201,29 @@ export default function ExploreScreen() {
       </ScrollView>
     </View>
   );
+
+  // Show loading state while auth is loading
+  if (authLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#C4896F" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Only show this screen for students - moved after all hooks
+  if (profile?.role !== 'student') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>This feature is only available for students.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (
