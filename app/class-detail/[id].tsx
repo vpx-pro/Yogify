@@ -130,6 +130,18 @@ export default function ClassDetailScreen() {
 
     // Check if already booked
     if (existingBooking) {
+      // Navigate to payment if booking exists but payment is pending
+      if (existingBooking.payment_status === 'pending') {
+        router.push({
+          pathname: '/payment/[classId]',
+          params: { 
+            classId: yogaClass.id,
+            bookingId: existingBooking.id 
+          }
+        });
+        return;
+      }
+      
       Alert.alert('Already Booked', 'You have already booked this class.');
       return;
     }
@@ -211,8 +223,14 @@ export default function ClassDetailScreen() {
         fetchClassDetails()
       ]);
 
-      // Navigate to booking confirmation
-      router.push('/booking-confirmation');
+      // Navigate to payment screen
+      router.push({
+        pathname: '/payment/[classId]',
+        params: { 
+          classId: yogaClass.id,
+          bookingId: data 
+        }
+      });
     } catch (error) {
       console.error('Error booking class:', error);
       
@@ -413,7 +431,7 @@ export default function ClassDetailScreen() {
               ]}>
                 {classOnline ? 'Online Class' : yogaClass.location}
               </Text>
-              {classOnline && yogaClass.meeting_link && existingBooking && (
+              {classOnline && yogaClass.meeting_link && existingBooking && existingBooking.payment_status === 'completed' && (
                 <TouchableOpacity
                   style={styles.joinButton}
                   onPress={handleJoinOnlineClass}
@@ -468,7 +486,12 @@ export default function ClassDetailScreen() {
           <View style={styles.bookingStatus}>
             <CheckCircle size={20} color="#4CAF50" />
             <View style={styles.bookingStatusContent}>
-              <Text style={styles.bookingStatusText}>You're booked for this class!</Text>
+              <Text style={styles.bookingStatusText}>
+                {existingBooking.payment_status === 'completed' 
+                  ? "You're booked for this class!" 
+                  : "Booking created - Payment pending"
+                }
+              </Text>
               <Text style={styles.participantCountText}>
                 {actualParticipantCount} participants enrolled
               </Text>
@@ -483,17 +506,20 @@ export default function ClassDetailScreen() {
           <TouchableOpacity
             style={[
               styles.bookButton,
-              (classFull || !!existingBooking || booking) && styles.bookButtonDisabled
+              (classFull || booking) && styles.bookButtonDisabled,
+              existingBooking && existingBooking.payment_status === 'pending' && styles.bookButtonPending
             ]}
             onPress={handleBookClass}
-            disabled={classFull || !!existingBooking || booking}
+            disabled={(classFull && !existingBooking) || booking}
           >
             {booking ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Text style={styles.bookButtonText}>
                 {existingBooking 
-                  ? 'Already Booked' 
+                  ? existingBooking.payment_status === 'pending'
+                    ? 'Complete Payment'
+                    : 'Already Booked'
                   : classFull 
                     ? 'Class Full' 
                     : `Book Now - $${yogaClass.price}`
@@ -774,6 +800,9 @@ const styles = StyleSheet.create({
   },
   bookButtonDisabled: {
     backgroundColor: '#CCC',
+  },
+  bookButtonPending: {
+    backgroundColor: '#FF9800',
   },
   bookButtonText: {
     fontSize: 16,
