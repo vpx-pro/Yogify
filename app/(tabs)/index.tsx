@@ -3,9 +3,16 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } fr
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar, Clock, Users, MapPin } from 'lucide-react-native';
+import TeacherAvatar from '@/components/TeacherAvatar';
+import { AvatarService } from '@/lib/avatarService';
 import type { Database } from '@/lib/supabase';
 
-type YogaClass = Database['public']['Tables']['yoga_classes']['Row'];
+type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
+  profiles: {
+    full_name: string;
+    avatar_url?: string;
+  };
+};
 
 export default function HomeScreen() {
   const { profile } = useAuth();
@@ -16,11 +23,23 @@ export default function HomeScreen() {
     fetchUpcomingClasses();
   }, []);
 
+  useEffect(() => {
+    if (upcomingClasses.length > 0) {
+      preloadTeacherAvatars();
+    }
+  }, [upcomingClasses]);
+
   const fetchUpcomingClasses = async () => {
     try {
       const { data, error } = await supabase
         .from('yoga_classes')
-        .select('*')
+        .select(`
+          *,
+          profiles!yoga_classes_teacher_id_fkey (
+            full_name,
+            avatar_url
+          )
+        `)
         .gte('date', new Date().toISOString().split('T')[0])
         .order('date', { ascending: true })
         .limit(5);
@@ -32,6 +51,20 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const preloadTeacherAvatars = async () => {
+    const teachers = upcomingClasses
+      .map(cls => ({
+        id: cls.teacher_id,
+        full_name: cls.profiles?.full_name || 'Unknown Teacher',
+        avatar_url: cls.profiles?.avatar_url
+      }))
+      .filter((teacher, index, self) => 
+        index === self.findIndex(t => t.id === teacher.id)
+      );
+
+    await AvatarService.preloadAvatars(teachers);
   };
 
   const isTeacher = profile?.role === 'teacher';
@@ -60,53 +93,70 @@ export default function HomeScreen() {
           {loading ? (
             <Text style={styles.loadingText}>Loading classes...</Text>
           ) : upcomingClasses.length > 0 ? (
-            upcomingClasses.map((yogaClass) => (
-              <View key={yogaClass.id} style={styles.classCard}>
-                <View style={styles.classHeader}>
-                  <Text style={styles.classTitle}>{yogaClass.title}</Text>
-                  <View style={styles.levelBadge}>
-                    <Text style={styles.levelText}>{yogaClass.level}</Text>
-                  </View>
-                </View>
-                
-                <Text style={styles.classDescription} numberOfLines={2}>
-                  {yogaClass.description}
-                </Text>
-                
-                <View style={styles.classDetails}>
-                  <View style={styles.detailItem}>
-                    <Calendar size={16} color="#666" />
-                    <Text style={styles.detailText}>{yogaClass.date}</Text>
+            upcomingClasses.map((yogaClass) => {
+              const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
+              
+              return (
+                <View key={yogaClass.id} style={styles.classCard}>
+                  <View style={styles.classHeader}>
+                    <Text style={styles.classTitle}>{yogaClass.title}</Text>
+                    <View style={styles.levelBadge}>
+                      <Text style={styles.levelText}>{yogaClass.level}</Text>
+                    </View>
                   </View>
                   
-                  <View style={styles.detailItem}>
-                    <Clock size={16} color="#666" />
-                    <Text style={styles.detailText}>{yogaClass.time}</Text>
-                  </View>
-                  
-                  <View style={styles.detailItem}>
-                    <Users size={16} color="#666" />
-                    <Text style={styles.detailText}>
-                      {yogaClass.current_participants}/{yogaClass.max_participants}
+                  <Text style={styles.classDescription} numberOfLines={2}>
+                    {yogaClass.description}
+                  </Text>
+
+                  {/* Teacher Info */}
+                  <View style={styles.teacherInfo}>
+                    <TeacherAvatar
+                      teacherId={yogaClass.teacher_id}
+                      teacherName={teacherName}
+                      avatarUrl={yogaClass.profiles?.avatar_url}
+                      size="SMALL"
+                    />
+                    <Text style={styles.teacherName}>
+                      {teacherName}
                     </Text>
                   </View>
                   
-                  <View style={styles.detailItem}>
-                    <MapPin size={16} color="#666" />
-                    <Text style={styles.detailText}>{yogaClass.location}</Text>
+                  <View style={styles.classDetails}>
+                    <View style={styles.detailItem}>
+                      <Calendar size={16} color="#666" />
+                      <Text style={styles.detailText}>{yogaClass.date}</Text>
+                    </View>
+                    
+                    <View style={styles.detailItem}>
+                      <Clock size={16} color="#666" />
+                      <Text style={styles.detailText}>{yogaClass.time}</Text>
+                    </View>
+                    
+                    <View style={styles.detailItem}>
+                      <Users size={16} color="#666" />
+                      <Text style={styles.detailText}>
+                        {yogaClass.current_participants}/{yogaClass.max_participants}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.detailItem}>
+                      <MapPin size={16} color="#666" />
+                      <Text style={styles.detailText}>{yogaClass.location}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.classFooter}>
+                    <Text style={styles.priceText}>${yogaClass.price}</Text>
+                    <TouchableOpacity style={styles.actionButton}>
+                      <Text style={styles.actionButtonText}>
+                        {isTeacher ? 'View' : 'Book Now'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-                
-                <View style={styles.classFooter}>
-                  <Text style={styles.priceText}>${yogaClass.price}</Text>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Text style={styles.actionButtonText}>
-                      {isTeacher ? 'View' : 'Book Now'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
+              );
+            })
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>
@@ -232,6 +282,17 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 16,
     lineHeight: 20,
+  },
+  teacherInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  teacherName: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+    marginLeft: 8,
   },
   classDetails: {
     flexDirection: 'row',

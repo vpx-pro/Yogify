@@ -13,7 +13,9 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, MapPin, User, Globe, Filter } from 'lucide-react-native';
+import { Calendar, Clock, MapPin, Globe, Filter } from 'lucide-react-native';
+import TeacherAvatar from '@/components/TeacherAvatar';
+import { AvatarService } from '@/lib/avatarService';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -60,6 +62,7 @@ export default function ExploreScreen() {
   useEffect(() => {
     if (classes.length > 0) {
       fetchParticipantCounts();
+      preloadTeacherAvatars();
     }
   }, [classes]);
 
@@ -117,6 +120,20 @@ export default function ExploreScreen() {
     } catch (error) {
       console.error('Error fetching participant counts:', error);
     }
+  };
+
+  const preloadTeacherAvatars = async () => {
+    const teachers = classes
+      .map(cls => ({
+        id: cls.teacher_id,
+        full_name: cls.profiles?.full_name || 'Unknown Teacher',
+        avatar_url: cls.profiles?.avatar_url
+      }))
+      .filter((teacher, index, self) => 
+        index === self.findIndex(t => t.id === teacher.id)
+      );
+
+    await AvatarService.preloadAvatars(teachers);
   };
 
   const applyFilters = () => {
@@ -330,6 +347,7 @@ export default function ExploreScreen() {
               const isFull = isClassFull(yogaClass);
               const isOnline = yogaClass.location.toLowerCase() === 'online';
               const participantCount = getParticipantCount(yogaClass);
+              const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
               
               return (
                 <TouchableOpacity
@@ -352,11 +370,14 @@ export default function ExploreScreen() {
                   </View>
 
                   <View style={styles.teacherInfo}>
-                    <View style={styles.teacherAvatar}>
-                      <User size={16} color="white" />
-                    </View>
+                    <TeacherAvatar
+                      teacherId={yogaClass.teacher_id}
+                      teacherName={teacherName}
+                      avatarUrl={yogaClass.profiles?.avatar_url}
+                      size="SMALL"
+                    />
                     <Text style={styles.teacherName}>
-                      {yogaClass.profiles?.full_name || 'Unknown Teacher'}
+                      {teacherName}
                     </Text>
                   </View>
 
@@ -579,19 +600,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  teacherAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#C4896F',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
   teacherName: {
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
+    marginLeft: 8,
   },
   classDetails: {
     flexDirection: 'row',

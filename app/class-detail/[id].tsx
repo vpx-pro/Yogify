@@ -13,7 +13,8 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, User, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle } from 'lucide-react-native';
+import TeacherAvatar from '@/components/TeacherAvatar';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -299,6 +300,7 @@ export default function ClassDetailScreen() {
   const classPast = isClassPast();
   const classFull = isClassFull();
   const classOnline = isOnline();
+  const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -334,12 +336,15 @@ export default function ClassDetailScreen() {
         <View style={styles.teacherSection}>
           <Text style={styles.sectionTitle}>Instructor</Text>
           <View style={styles.teacherInfo}>
-            <View style={styles.teacherAvatar}>
-              <User size={24} color="white" />
-            </View>
+            <TeacherAvatar
+              teacherId={yogaClass.teacher_id}
+              teacherName={teacherName}
+              avatarUrl={yogaClass.profiles?.avatar_url}
+              size="LARGE"
+            />
             <View style={styles.teacherDetails}>
               <Text style={styles.teacherName}>
-                {yogaClass.profiles?.full_name || 'Unknown Teacher'}
+                {teacherName}
               </Text>
               <View style={styles.teacherRating}>
                 <Star size={14} color="#FFD700" fill="#FFD700" />
@@ -597,17 +602,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  teacherAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#C4896F',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
   teacherDetails: {
     flex: 1,
+    marginLeft: 16,
   },
   teacherName: {
     fontSize: 18,
