@@ -1,0 +1,234 @@
+{
+  "timestamp": "2025-06-24T23:58:10.206Z",
+  "summary": {
+    "totalTests": 21,
+    "passedTests": 9,
+    "failedTests": 12,
+    "successRate": 42.857142857142854
+  },
+  "errors": [
+    {
+      "operation": "CREATE profiles",
+      "error": "new row violates row-level security policy for table \"profiles\""
+    },
+    {
+      "operation": "CREATE teacher profile",
+      "error": "new row violates row-level security policy for table \"profiles\""
+    },
+    {
+      "operation": "CREATE yoga_classes",
+      "error": "new row violates row-level security policy for table \"yoga_classes\""
+    },
+    {
+      "operation": "CREATE booking",
+      "error": "Could not find the function public.create_booking_with_count(p_payment_status, p_status, p_student_id) in the schema cache"
+    },
+    {
+      "operation": "UPDATE yoga_classes",
+      "error": "invalid input syntax for type uuid: \"undefined\""
+    },
+    {
+      "operation": "UPDATE payment status",
+      "error": "Could not find the function public.update_booking_payment_status(new_payment_status) in the schema cache"
+    },
+    {
+      "operation": "SYNC participant count",
+      "error": "Could not find the function public.sync_participant_count without parameters in the schema cache"
+    },
+    {
+      "operation": "CANCEL booking",
+      "error": "Could not find the function public.cancel_booking_with_count(p_student_id) in the schema cache"
+    },
+    {
+      "operation": "DELETE yoga_classes",
+      "error": "invalid input syntax for type uuid: \"undefined\""
+    },
+    {
+      "operation": "DELETE profiles",
+      "error": "TypeError: fetch failed"
+    },
+    {
+      "operation": "Bulk read performance",
+      "error": "Query took 2247ms (>2000ms)"
+    },
+    {
+      "operation": "Complex query performance",
+      "error": "Query took 5905ms (>3000ms)"
+    }
+  ],
+  "results": [
+    {
+      "timestamp": "2025-06-24T23:57:26.184Z",
+      "operation": "CREATE",
+      "table": "profiles",
+      "success": false,
+      "details": "new row violates row-level security policy for table \"profiles\"",
+      "duration": 3334
+    },
+    {
+      "timestamp": "2025-06-24T23:57:27.609Z",
+      "operation": "CREATE",
+      "table": "profiles",
+      "success": false,
+      "details": "new row violates row-level security policy for table \"profiles\"",
+      "duration": 1422
+    },
+    {
+      "timestamp": "2025-06-24T23:57:29.045Z",
+      "operation": "CREATE",
+      "table": "yoga_classes",
+      "success": false,
+      "details": "new row violates row-level security policy for table \"yoga_classes\"",
+      "duration": 1434
+    },
+    {
+      "timestamp": "2025-06-24T23:57:29.849Z",
+      "operation": "CREATE",
+      "table": "bookings",
+      "success": false,
+      "details": "Could not find the function public.create_booking_with_count(p_payment_status, p_status, p_student_id) in the schema cache",
+      "duration": 804
+    },
+    {
+      "timestamp": "2025-06-24T23:57:30.308Z",
+      "operation": "READ",
+      "table": "profiles",
+      "success": true,
+      "details": "Retrieved 0 profiles",
+      "duration": 457
+    },
+    {
+      "timestamp": "2025-06-24T23:57:30.990Z",
+      "operation": "READ",
+      "table": "yoga_classes",
+      "success": true,
+      "details": "Retrieved 0 classes with teacher info",
+      "duration": 682
+    },
+    {
+      "timestamp": "2025-06-24T23:57:32.148Z",
+      "operation": "READ",
+      "table": "bookings",
+      "success": true,
+      "details": "Retrieved 0 bookings with class info",
+      "duration": 1158
+    },
+    {
+      "timestamp": "2025-06-24T23:57:33.346Z",
+      "operation": "READ",
+      "table": "yoga_classes",
+      "success": true,
+      "details": "Retrieved 0 upcoming classes",
+      "duration": 1198
+    },
+    {
+      "timestamp": "2025-06-24T23:57:34.446Z",
+      "operation": "UPDATE",
+      "table": "profiles",
+      "success": true,
+      "details": "Updated profile name",
+      "duration": 1094
+    },
+    {
+      "timestamp": "2025-06-24T23:57:36.638Z",
+      "operation": "UPDATE",
+      "table": "yoga_classes",
+      "success": false,
+      "details": "invalid input syntax for type uuid: \"undefined\"",
+      "duration": 2192
+    },
+    {
+      "timestamp": "2025-06-24T23:57:39.557Z",
+      "operation": "UPDATE",
+      "table": "bookings",
+      "success": false,
+      "details": "Could not find the function public.update_booking_payment_status(new_payment_status) in the schema cache",
+      "duration": 2917
+    },
+    {
+      "timestamp": "2025-06-24T23:57:40.307Z",
+      "operation": "UPDATE",
+      "table": "participant_count",
+      "success": false,
+      "details": "Could not find the function public.sync_participant_count without parameters in the schema cache",
+      "duration": 749
+    },
+    {
+      "timestamp": "2025-06-24T23:57:41.690Z",
+      "operation": "DELETE",
+      "table": "bookings",
+      "success": false,
+      "details": "Could not find the function public.cancel_booking_with_count(p_student_id) in the schema cache",
+      "duration": 1378
+    },
+    {
+      "timestamp": "2025-06-24T23:57:42.387Z",
+      "operation": "DELETE",
+      "table": "yoga_classes",
+      "success": false,
+      "details": "invalid input syntax for type uuid: \"undefined\"",
+      "duration": 693
+    },
+    {
+      "timestamp": "2025-06-24T23:57:43.453Z",
+      "operation": "DELETE",
+      "table": "profiles",
+      "success": false,
+      "details": "TypeError: fetch failed",
+      "duration": 1066
+    },
+    {
+      "timestamp": "2025-06-24T23:57:47.926Z",
+      "operation": "CONSTRAINT",
+      "table": "profiles",
+      "success": true,
+      "details": "Email validation constraint working: new row violates row-level security policy for table \"profiles\"",
+      "duration": 4471
+    },
+    {
+      "timestamp": "2025-06-24T23:57:49.498Z",
+      "operation": "CONSTRAINT",
+      "table": "yoga_classes",
+      "success": true,
+      "details": "Price constraint working: new row violates row-level security policy for table \"yoga_classes\"",
+      "duration": 1569
+    },
+    {
+      "timestamp": "2025-06-24T23:57:55.228Z",
+      "operation": "CONSTRAINT",
+      "table": "bookings",
+      "success": true,
+      "details": "Unique booking constraint working: new row violates row-level security policy for table \"yoga_classes\"",
+      "duration": 5728
+    },
+    {
+      "timestamp": "2025-06-24T23:58:02.026Z",
+      "operation": "ROLLBACK",
+      "table": "bookings",
+      "success": true,
+      "details": "Transaction rollback working: new row violates row-level security policy for table \"yoga_classes\"",
+      "duration": 6797
+    },
+    {
+      "timestamp": "2025-06-24T23:58:04.273Z",
+      "operation": "PERFORMANCE",
+      "table": "yoga_classes",
+      "success": false,
+      "details": "Bulk read of 100 classes: 2247ms (Slow)",
+      "duration": 2247
+    },
+    {
+      "timestamp": "2025-06-24T23:58:10.178Z",
+      "operation": "PERFORMANCE",
+      "table": "bookings",
+      "success": false,
+      "details": "Complex join query: 5905ms (Slow)",
+      "duration": 5905
+    }
+  ],
+  "environment": {
+    "nodeVersion": "v20.19.1",
+    "platform": "linux",
+    "supabaseUrl": "configured"
+  }
+}
