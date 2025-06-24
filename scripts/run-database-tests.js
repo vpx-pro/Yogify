@@ -5,6 +5,9 @@
  * Executes comprehensive database tests and generates reports
  */
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const DatabaseTester = require('./database-test');
 const fs = require('fs');
 const path = require('path');
