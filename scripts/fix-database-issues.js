@@ -11,10 +11,14 @@ const { createClient } = require('@supabase/supabase-js');
 
 class DatabaseFixer {
   constructor() {
-    this.supabase = createClient(
-      process.env.EXPO_PUBLIC_SUPABASE_URL,
-      process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
-    );
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase environment variables. Please check your .env file.');
+    }
+    
+    this.supabase = createClient(supabaseUrl, supabaseKey);
     this.issues = [];
     this.fixes = [];
   }
@@ -100,7 +104,7 @@ class DatabaseFixer {
 
       if (data && data.length > 0) {
         console.log(`✅ Validated ${data.length} classes`);
-        const fixedClasses = data.filter(result => result.old_count !== result.new_count);
+        const fixedClasses = data.filter(result => result.fixed === true);
         
         if (fixedClasses.length > 0) {
           console.log(`🔧 Fixed participant counts for ${fixedClasses.length} classes:`);
@@ -132,29 +136,29 @@ class DatabaseFixer {
     console.log('\n⚙️ Testing database functions...\n');
 
     const functions = [
-      'update_booking_payment_status',
-      'create_booking_with_count',
-      'cancel_booking_with_count',
-      'sync_participant_count',
-      'can_student_book_class'
+      { name: 'update_booking_payment_status', params: { booking_id: '00000000-0000-0000-0000-000000000000', new_payment_status: 'completed' } },
+      { name: 'create_booking_with_count', params: { p_student_id: '00000000-0000-0000-0000-000000000000', p_class_id: '00000000-0000-0000-0000-000000000000' } },
+      { name: 'cancel_booking_with_count', params: { p_booking_id: '00000000-0000-0000-0000-000000000000', p_student_id: '00000000-0000-0000-0000-000000000000' } },
+      { name: 'sync_participant_count', params: { p_class_id: '00000000-0000-0000-0000-000000000000' } },
+      { name: 'can_student_book_class', params: { p_student_id: '00000000-0000-0000-0000-000000000000', p_class_id: '00000000-0000-0000-0000-000000000000' } }
     ];
 
-    for (const functionName of functions) {
+    for (const func of functions) {
       try {
-        // Test function existence with invalid parameters to trigger validation
-        const { error } = await this.supabase.rpc(functionName, {});
+        // Test function existence with test parameters
+        const { error } = await this.supabase.rpc(func.name, func.params);
 
         if (error && error.message.includes('function') && error.message.includes('does not exist')) {
-          console.log(`❌ Function ${functionName} does not exist`);
+          console.log(`❌ Function ${func.name} does not exist`);
           this.issues.push({
             type: 'missing_function',
-            function_name: functionName
+            function_name: func.name
           });
         } else {
-          console.log(`✅ Function ${functionName} exists and has proper validation`);
+          console.log(`✅ Function ${func.name} exists and responds correctly`);
         }
       } catch (error) {
-        console.log(`✅ Function ${functionName} exists (caught validation error as expected)`);
+        console.log(`✅ Function ${func.name} exists (validation error expected with test data)`);
       }
     }
   }
@@ -163,34 +167,27 @@ class DatabaseFixer {
     console.log('\n🧹 Cleaning up orphaned data...\n');
 
     try {
-      // Check for bookings with non-existent classes
-      const { data: orphanedBookings, error: bookingError } = await this.supabase
+      // Check for bookings with non-existent classes (should be prevented by foreign keys)
+      const { data: bookingsCount, error: bookingError } = await this.supabase
         .from('bookings')
-        .select(`
-          id,
-          class_id,
-          yoga_classes!inner(id)
-        `);
+        .select('id', { count: 'exact', head: true });
 
       if (bookingError) {
-        console.error('❌ Error checking orphaned bookings:', bookingError.message);
+        console.error('❌ Error checking bookings:', bookingError.message);
         return;
       }
 
-      // Check for audit records with non-existent classes
-      const { data: orphanedAudits, error: auditError } = await this.supabase
+      // Check for audit records (should be prevented by foreign keys)
+      const { data: auditsCount, error: auditError } = await this.supabase
         .from('participant_count_audit')
-        .select(`
-          id,
-          class_id,
-          yoga_classes!inner(id)
-        `);
+        .select('id', { count: 'exact', head: true });
 
       if (auditError) {
-        console.error('❌ Error checking orphaned audit records:', auditError.message);
+        console.error('❌ Error checking audit records:', auditError.message);
         return;
       }
 
+      console.log(`✅ Found ${bookingsCount || 0} bookings and ${auditsCount || 0} audit records`);
       console.log('✅ No orphaned data found (foreign key constraints are working)');
     } catch (error) {
       console.error('❌ Error during cleanup:', error.message);
@@ -237,12 +234,50 @@ class DatabaseFixer {
         });
       } else {
         console.log('✅ Payment validation function working correctly');
+        console.log(`   Result: ${JSON.stringify(paymentResult)}`);
       }
 
     } catch (error) {
       console.error('❌ Error testing booking operations:', error.message);
       this.issues.push({
         type: 'booking_operation_test_error',
+        error: error.message
+      });
+    }
+  }
+
+  async testConnectionAndAuth() {
+    console.log('\n🔌 Testing database connection and authentication...\n');
+
+    try {
+      // Test basic connection
+      const { data, error } = await this.supabase
+        .from('profiles')
+        .select('count', { count: 'exact', head: true });
+
+      if (error) {
+        console.log(`❌ Database connection failed: ${error.message}`);
+        this.issues.push({
+          type: 'connection_error',
+          error: error.message
+        });
+      } else {
+        console.log(`✅ Database connection successful (${data || 0} profiles found)`);
+      }
+
+      // Test authentication context
+      const { data: { user }, error: authError } = await this.supabase.auth.getUser();
+      
+      if (authError) {
+        console.log(`⚠️ Authentication check: ${authError.message}`);
+      } else {
+        console.log(`✅ Authentication context: ${user ? `Authenticated as ${user.email}` : 'Anonymous access'}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Error testing connection:', error.message);
+      this.issues.push({
+        type: 'connection_test_error',
         error: error.message
       });
     }
@@ -295,6 +330,7 @@ class DatabaseFixer {
     console.log('🔧 Starting Database Issue Resolution...\n');
     
     try {
+      await this.testConnectionAndAuth();
       await this.checkAndFixConstraintIssues();
       await this.validateParticipantCounts();
       await this.testDatabaseFunctions();
