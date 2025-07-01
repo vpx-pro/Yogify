@@ -108,6 +108,13 @@ export default function CreateRetreatModal({ visible, onClose, onSubmit, loading
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    // Calculate retreat duration in days
+    const durationInDays = Math.ceil((formData.endDate.getTime() - formData.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // For retreats, we'll use a standard daily session duration (e.g., 2 hours = 120 minutes)
+    // The actual retreat duration is tracked by start/end dates
+    const dailySessionDuration = 120; // 2 hours per day
+
     const retreatData = {
       title: formData.title.trim(),
       description: formData.description.trim(),
@@ -115,7 +122,7 @@ export default function CreateRetreatModal({ visible, onClose, onSubmit, loading
       date: formData.startDate.toISOString().split('T')[0],
       retreat_end_date: formData.endDate.toISOString().split('T')[0],
       time: formData.time.toTimeString().split(' ')[0].substring(0, 5),
-      duration: Math.ceil((formData.endDate.getTime() - formData.startDate.getTime()) / (1000 * 60 * 60 * 24)) * 24 * 60, // Total minutes
+      duration: dailySessionDuration, // Use standard daily session duration
       level: formData.level,
       is_retreat: true,
       is_virtual: formData.isVirtual,
