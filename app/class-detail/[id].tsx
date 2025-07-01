@@ -14,7 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle, User } from 'lucide-react-native';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle, User, Tent } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -123,7 +123,8 @@ export default function ClassDetailScreen() {
     if (!profile?.id || !yogaClass) return;
 
     // Check if class is full based on actual count
-    if (actualParticipantCount >= yogaClass.max_participants) {
+    const maxCapacity = yogaClass.is_retreat ? yogaClass.retreat_capacity : yogaClass.max_participants;
+    if (actualParticipantCount >= (maxCapacity || yogaClass.max_participants)) {
       Alert.alert('Class Full', 'This class is already full.');
       return;
     }
@@ -280,6 +281,25 @@ export default function ClassDetailScreen() {
     });
   };
 
+  const formatDateRange = () => {
+    if (!yogaClass?.retreat_end_date) return formatDate(yogaClass?.date || '');
+    
+    const start = new Date(yogaClass.date);
+    const end = new Date(yogaClass.retreat_end_date);
+    
+    const startMonth = start.toLocaleDateString('en-US', { month: 'long' });
+    const endMonth = end.toLocaleDateString('en-US', { month: 'long' });
+    const startDay = start.getDate();
+    const endDay = end.getDate();
+    const year = start.getFullYear();
+
+    if (startMonth === endMonth) {
+      return `${startMonth} ${startDay} - ${endDay}, ${year}`;
+    } else {
+      return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${year}`;
+    }
+  };
+
   const formatTime = (timeString: string) => {
     const [hours, minutes] = timeString.split(':');
     const date = new Date();
@@ -292,7 +312,9 @@ export default function ClassDetailScreen() {
   };
 
   const isClassFull = () => {
-    return actualParticipantCount >= (yogaClass?.max_participants || 0);
+    if (!yogaClass) return false;
+    const maxCapacity = yogaClass.is_retreat ? yogaClass.retreat_capacity : yogaClass.max_participants;
+    return actualParticipantCount >= (maxCapacity || yogaClass.max_participants);
   };
 
   const isClassPast = () => {
@@ -302,7 +324,26 @@ export default function ClassDetailScreen() {
   };
 
   const isOnline = () => {
-    return yogaClass?.location.toLowerCase() === 'online';
+    return yogaClass?.is_virtual || yogaClass?.location.toLowerCase() === 'online';
+  };
+
+  const isEarlyBirdActive = () => {
+    if (!yogaClass?.early_bird_deadline) return false;
+    return new Date(yogaClass.early_bird_deadline) >= new Date();
+  };
+
+  const getCurrentPrice = () => {
+    if (!yogaClass) return 0;
+    return isEarlyBirdActive() && yogaClass.early_bird_price 
+      ? yogaClass.early_bird_price 
+      : yogaClass.price;
+  };
+
+  const getDuration = () => {
+    if (!yogaClass?.retreat_end_date) return 1;
+    const start = new Date(yogaClass.date);
+    const end = new Date(yogaClass.retreat_end_date);
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   };
 
   if (loading) {
@@ -310,7 +351,7 @@ export default function ClassDetailScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#C4896F" />
-          <Text style={styles.loadingText}>Loading class details...</Text>
+          <Text style={styles.loadingText}>Loading details...</Text>
         </View>
       </SafeAreaView>
     );
@@ -335,6 +376,7 @@ export default function ClassDetailScreen() {
   const classFull = isClassFull();
   const classOnline = isOnline();
   const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
+  const isRetreat = yogaClass.is_retreat;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -346,7 +388,7 @@ export default function ClassDetailScreen() {
         >
           <ArrowLeft size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Class Details</Text>
+        <Text style={styles.headerTitle}>{isRetreat ? 'Retreat Details' : 'Class Details'}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -355,15 +397,24 @@ export default function ClassDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Class Image */}
+        {/* Class/Retreat Image */}
         <View style={styles.imageContainer}>
           <Image
             source={{ 
-              uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+              uri: isRetreat 
+                ? (yogaClass.retreat_image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800')
+                : (yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800')
             }}
             style={styles.classImage}
             resizeMode="cover"
           />
+          {isRetreat && (
+            <View style={styles.durationBadgeContainer}>
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>{getDuration()}-Day Retreat</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Teacher Info */}
@@ -397,22 +448,23 @@ export default function ClassDetailScreen() {
 
         {/* Class Details */}
         <View style={styles.detailsSection}>
-          <Text style={styles.sectionTitle}>Class Information</Text>
+          <Text style={styles.sectionTitle}>{isRetreat ? 'Retreat Information' : 'Class Information'}</Text>
           
           <View style={styles.detailItem}>
-            <Calendar size={20} color="#C4896F" />
+            <Calendar size={20} color="#8B7355" />
             <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Date</Text>
-              <Text style={styles.detailValue}>{formatDate(yogaClass.date)}</Text>
+              <Text style={styles.detailLabel}>{isRetreat ? 'Dates' : 'Date'}</Text>
+              <Text style={styles.detailValue}>{isRetreat ? formatDateRange() : formatDate(yogaClass.date)}</Text>
             </View>
           </View>
 
           <View style={styles.detailItem}>
-            <Clock size={20} color="#C4896F" />
+            <Clock size={20} color="#8B7355" />
             <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Time & Duration</Text>
+              <Text style={styles.detailLabel}>Start Time</Text>
               <Text style={styles.detailValue}>
-                {formatTime(yogaClass.time)} ({yogaClass.duration} minutes)
+                {formatTime(yogaClass.time)}
+                {!isRetreat && ` (${yogaClass.duration} minutes)`}
               </Text>
             </View>
           </View>
@@ -421,7 +473,7 @@ export default function ClassDetailScreen() {
             {classOnline ? (
               <Globe size={20} color="#4CAF50" />
             ) : (
-              <MapPin size={20} color="#C4896F" />
+              <MapPin size={20} color="#8B7355" />
             )}
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Location</Text>
@@ -429,7 +481,7 @@ export default function ClassDetailScreen() {
                 styles.detailValue,
                 classOnline && styles.onlineText
               ]}>
-                {classOnline ? 'Online Class' : yogaClass.location}
+                {classOnline ? 'Online Experience' : yogaClass.location}
               </Text>
               {classOnline && yogaClass.meeting_link && existingBooking && existingBooking.payment_status === 'completed' && (
                 <TouchableOpacity
@@ -443,7 +495,7 @@ export default function ClassDetailScreen() {
           </View>
 
           <View style={styles.detailItem}>
-            <Users size={20} color="#C4896F" />
+            <Users size={20} color="#8B7355" />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Participants</Text>
               <View style={styles.participantInfo}>
@@ -451,13 +503,15 @@ export default function ClassDetailScreen() {
                   styles.detailValue,
                   classFull && styles.fullText
                 ]}>
-                  {actualParticipantCount} / {yogaClass.max_participants}
+                  {actualParticipantCount} / {isRetreat ? yogaClass.retreat_capacity : yogaClass.max_participants}
                   {classFull && ' (Full)'}
                 </Text>
                 <View style={styles.participantIndicator}>
                   <View style={[
                     styles.participantBar,
-                    { width: `${Math.min((actualParticipantCount / yogaClass.max_participants) * 100, 100)}%` }
+                    { 
+                      width: `${Math.min((actualParticipantCount / (isRetreat ? yogaClass.retreat_capacity : yogaClass.max_participants)) * 100, 100)}%` 
+                    }
                   ]} />
                 </View>
               </View>
@@ -465,18 +519,44 @@ export default function ClassDetailScreen() {
           </View>
 
           <View style={styles.detailItem}>
-            <DollarSign size={20} color="#C4896F" />
+            <DollarSign size={20} color="#8B7355" />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Price</Text>
-              <Text style={styles.priceValue}>${yogaClass.price}</Text>
+              <View style={styles.priceContainer}>
+                {isEarlyBirdActive() && yogaClass.early_bird_price && (
+                  <>
+                    <Text style={styles.earlyBirdLabel}>Early Bird Price</Text>
+                    <Text style={styles.priceValue}>€{yogaClass.early_bird_price}</Text>
+                    <Text style={styles.regularPriceLabel}>Regular Price: €{yogaClass.price}</Text>
+                  </>
+                )}
+                {(!isEarlyBirdActive() || !yogaClass.early_bird_price) && (
+                  <Text style={styles.priceValue}>€{yogaClass.price}</Text>
+                )}
+              </View>
             </View>
           </View>
         </View>
 
+        {/* Retreat Highlights */}
+        {isRetreat && yogaClass.retreat_highlights && yogaClass.retreat_highlights.length > 0 && (
+          <View style={styles.highlightsSection}>
+            <Text style={styles.sectionTitle}>Retreat Highlights</Text>
+            <View style={styles.highlightsList}>
+              {yogaClass.retreat_highlights.map((highlight, index) => (
+                <View key={index} style={styles.highlightItem}>
+                  <View style={styles.highlightBullet} />
+                  <Text style={styles.highlightText}>{highlight}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Description */}
         {yogaClass.description && (
           <View style={styles.descriptionSection}>
-            <Text style={styles.sectionTitle}>About This Class</Text>
+            <Text style={styles.sectionTitle}>About This {isRetreat ? 'Retreat' : 'Class'}</Text>
             <Text style={styles.description}>{yogaClass.description}</Text>
           </View>
         )}
@@ -488,7 +568,7 @@ export default function ClassDetailScreen() {
             <View style={styles.bookingStatusContent}>
               <Text style={styles.bookingStatusText}>
                 {existingBooking.payment_status === 'completed' 
-                  ? "You're booked for this class!" 
+                  ? `You're booked for this ${isRetreat ? 'retreat' : 'class'}!` 
                   : "Booking created - Payment pending"
                 }
               </Text>
@@ -521,15 +601,15 @@ export default function ClassDetailScreen() {
                     ? 'Complete Payment'
                     : 'Already Booked'
                   : classFull 
-                    ? 'Class Full' 
-                    : `Book Now - $${yogaClass.price}`
+                    ? `${isRetreat ? 'Retreat' : 'Class'} Full` 
+                    : `Book Now - €${getCurrentPrice()}`
                 }
               </Text>
             )}
           </TouchableOpacity>
           {!existingBooking && !classFull && (
             <Text style={styles.spotsLeftText}>
-              {yogaClass.max_participants - actualParticipantCount} spots left
+              {(isRetreat ? yogaClass.retreat_capacity : yogaClass.max_participants) - actualParticipantCount} spots left
             </Text>
           )}
         </View>
@@ -541,7 +621,7 @@ export default function ClassDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F4EDE4',
   },
   header: {
     flexDirection: 'row',
@@ -593,7 +673,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
@@ -605,10 +685,27 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     height: 250,
+    position: 'relative',
   },
   classImage: {
     width: '100%',
     height: '100%',
+  },
+  durationBadgeContainer: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+  },
+  durationBadge: {
+    backgroundColor: 'rgba(139, 115, 85, 0.9)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  durationText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '600',
   },
   teacherSection: {
     backgroundColor: 'white',
@@ -622,7 +719,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -661,12 +758,12 @@ const styles = StyleSheet.create({
   },
   classType: {
     fontSize: 16,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '500',
     marginBottom: 12,
   },
   levelBadge: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 6,
@@ -719,7 +816,7 @@ const styles = StyleSheet.create({
   },
   participantBar: {
     height: '100%',
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 2,
   },
   onlineText: {
@@ -728,10 +825,25 @@ const styles = StyleSheet.create({
   fullText: {
     color: '#FF6B6B',
   },
+  priceContainer: {
+    marginTop: 4,
+  },
+  earlyBirdLabel: {
+    fontSize: 14,
+    color: '#FF9800',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
   priceValue: {
     fontSize: 20,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '700',
+  },
+  regularPriceLabel: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 2,
+    textDecorationLine: 'line-through',
   },
   joinButton: {
     backgroundColor: '#4CAF50',
@@ -745,6 +857,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'white',
     fontWeight: '500',
+  },
+  highlightsSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginTop: 8,
+  },
+  highlightsList: {
+    marginTop: 8,
+  },
+  highlightItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  highlightBullet: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#8B7355',
+    marginTop: 6,
+    marginRight: 12,
+  },
+  highlightText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+    lineHeight: 22,
   },
   descriptionSection: {
     backgroundColor: 'white',
@@ -791,7 +930,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E0E0E0',
   },
   bookButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 25,
     paddingVertical: 16,
     alignItems: 'center',

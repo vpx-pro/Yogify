@@ -9,7 +9,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CircleCheck as CheckCircle, Calendar, Clock, ArrowRight } from 'lucide-react-native';
+import { CircleCheck as CheckCircle, Calendar, Clock, ArrowRight, Tent } from 'lucide-react-native';
 
 export default function PaymentSuccessScreen() {
   const router = useRouter();
@@ -85,7 +85,7 @@ export default function PaymentSuccessScreen() {
   };
 
   const handleGoToBookings = () => {
-    router.replace('/(tabs)/bookings');
+    router.replace('/(tabs)/my-bookings');
   };
 
   const handleViewClassDetails = () => {
@@ -119,7 +119,7 @@ export default function PaymentSuccessScreen() {
         >
           <Text style={styles.successTitle}>Payment Successful!</Text>
           <Text style={styles.successSubtitle}>
-            Your yoga class has been booked and paid for.
+            Your booking has been confirmed and paid for.
           </Text>
         </Animated.View>
 
@@ -133,10 +133,10 @@ export default function PaymentSuccessScreen() {
             }
           ]}
         >
-          <Text style={styles.detailsTitle}>Class Details</Text>
+          <Text style={styles.detailsTitle}>Booking Details</Text>
           
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Class</Text>
+            <Text style={styles.detailLabel}>Experience</Text>
             <Text style={styles.detailValue}>{params.classTitle}</Text>
           </View>
 
@@ -169,7 +169,7 @@ export default function PaymentSuccessScreen() {
           
           <View style={styles.priceRow}>
             <Text style={styles.priceLabel}>Amount Paid</Text>
-            <Text style={styles.priceValue}>${params.price}</Text>
+            <Text style={styles.priceValue}>€{params.price}</Text>
           </View>
         </Animated.View>
 
@@ -197,7 +197,7 @@ export default function PaymentSuccessScreen() {
             onPress={handleViewClassDetails}
             activeOpacity={0.8}
           >
-            <Text style={styles.secondaryButtonText}>View Class Details</Text>
+            <Text style={styles.secondaryButtonText}>View Details</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -220,7 +220,7 @@ export default function PaymentSuccessScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F4EDE4',
   },
   content: {
     flex: 1,
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   primaryButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 25,
     paddingVertical: 16,
     paddingHorizontal: 24,
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: '#C4896F',
+    borderColor: '#8B7355',
     borderRadius: 25,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 16,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '600',
   },
   confirmationContainer: {

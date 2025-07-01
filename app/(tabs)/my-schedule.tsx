@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, RefreshControl, Modal } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, Users, MapPin, Globe, Eye, X, Mail, User } from 'lucide-react-native';
+import { Calendar, Clock, MapPin, Globe, Eye, X, Mail, User, Tent } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type ClassWithBookings = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -27,19 +27,22 @@ type StudentInfo = {
 export default function MyScheduleScreen() {
   const { profile } = useAuth();
   const [upcomingClasses, setUpcomingClasses] = useState<ClassWithBookings[]>([]);
+  const [upcomingRetreats, setUpcomingRetreats] = useState<ClassWithBookings[]>([]);
   const [pastClasses, setPastClasses] = useState<ClassWithBookings[]>([]);
+  const [pastRetreats, setPastRetreats] = useState<ClassWithBookings[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<ClassWithBookings | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ClassWithBookings | null>(null);
   const [showStudentModal, setShowStudentModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'classes' | 'retreats'>('classes');
 
   useEffect(() => {
     if (profile?.id && profile?.role === 'teacher') {
-      fetchClasses();
+      fetchClassesAndRetreats();
     }
   }, [profile]);
 
-  const fetchClasses = async () => {
+  const fetchClassesAndRetreats = async () => {
     if (!profile?.id) return;
 
     try {
@@ -65,29 +68,53 @@ export default function MyScheduleScreen() {
       if (error) throw error;
 
       const now = new Date();
-      const upcoming: ClassWithBookings[] = [];
-      const past: ClassWithBookings[] = [];
+      const upcomingClassesData: ClassWithBookings[] = [];
+      const upcomingRetreatsData: ClassWithBookings[] = [];
+      const pastClassesData: ClassWithBookings[] = [];
+      const pastRetreatsData: ClassWithBookings[] = [];
 
-      data?.forEach((classItem) => {
-        const classDateTime = new Date(`${classItem.date} ${classItem.time}`);
-        if (classDateTime > now) {
-          upcoming.push(classItem);
+      data?.forEach((item) => {
+        // For retreats, use end_date if available
+        const itemEndDate = item.is_retreat && item.retreat_end_date 
+          ? new Date(`${item.retreat_end_date} ${item.time}`) 
+          : new Date(`${item.date} ${item.time}`);
+          
+        const isPast = itemEndDate < now;
+        
+        if (item.is_retreat) {
+          if (isPast) {
+            pastRetreatsData.push(item);
+          } else {
+            upcomingRetreatsData.push(item);
+          }
         } else {
-          past.push(classItem);
+          if (isPast) {
+            pastClassesData.push(item);
+          } else {
+            upcomingClassesData.push(item);
+          }
         }
       });
 
-      // Sort past classes by date (most recent first)
-      past.sort((a, b) => {
+      // Sort past items by date (most recent first)
+      pastClassesData.sort((a, b) => {
+        const dateA = new Date(`${a.date} ${a.time}`);
+        const dateB = new Date(`${b.date} ${b.time}`);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      pastRetreatsData.sort((a, b) => {
         const dateA = new Date(`${a.date} ${a.time}`);
         const dateB = new Date(`${b.date} ${b.time}`);
         return dateB.getTime() - dateA.getTime();
       });
 
-      setUpcomingClasses(upcoming);
-      setPastClasses(past);
+      setUpcomingClasses(upcomingClassesData);
+      setUpcomingRetreats(upcomingRetreatsData);
+      setPastClasses(pastClassesData);
+      setPastRetreats(pastRetreatsData);
     } catch (error) {
-      console.error('Error fetching classes:', error);
+      console.error('Error fetching classes and retreats:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,7 +123,7 @@ export default function MyScheduleScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchClasses();
+    fetchClassesAndRetreats();
   };
 
   const formatDate = (dateString: string) => {
@@ -119,6 +146,24 @@ export default function MyScheduleScreen() {
     });
   };
 
+  const formatDateRange = (startDate: string, endDate?: string) => {
+    if (!endDate) return formatDate(startDate);
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+    const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+    const startDay = start.getDate();
+    const endDay = end.getDate();
+
+    if (startMonth === endMonth) {
+      return `${startMonth} ${startDay} - ${endDay}`;
+    } else {
+      return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
+    }
+  };
+
   const formatTime = (timeString: string) => {
     const [hours, minutes] = timeString.split(':');
     const date = new Date();
@@ -139,14 +184,14 @@ export default function MyScheduleScreen() {
   };
 
   const showStudentList = (classItem: ClassWithBookings) => {
-    setSelectedClass(classItem);
+    setSelectedItem(classItem);
     setShowStudentModal(true);
   };
 
   const renderStudentModal = () => {
-    if (!selectedClass) return null;
+    if (!selectedItem) return null;
 
-    const students: StudentInfo[] = selectedClass.bookings.map(booking => ({
+    const students: StudentInfo[] = selectedItem.bookings.map(booking => ({
       id: booking.student_id,
       full_name: booking.profiles.full_name,
       email: booking.profiles.email,
@@ -172,9 +217,12 @@ export default function MyScheduleScreen() {
           </View>
 
           <View style={styles.modalClassInfo}>
-            <Text style={styles.modalClassName}>{selectedClass.title}</Text>
+            <Text style={styles.modalClassName}>{selectedItem.title}</Text>
             <Text style={styles.modalClassDate}>
-              {formatDate(selectedClass.date)} at {formatTime(selectedClass.time)}
+              {selectedItem.is_retreat 
+                ? formatDateRange(selectedItem.date, selectedItem.retreat_end_date)
+                : formatDate(selectedItem.date)
+              } at {formatTime(selectedItem.time)}
             </Text>
           </View>
 
@@ -213,15 +261,24 @@ export default function MyScheduleScreen() {
   };
 
   const renderClassCard = (classItem: ClassWithBookings, isPast: boolean = false) => {
-    const isOnline = classItem.location.toLowerCase() === 'online';
+    const isOnline = classItem.is_virtual || classItem.location.toLowerCase() === 'online';
     const { totalBookings, paidBookings, pendingPayments } = getBookingStats(classItem);
+    const isRetreat = classItem.is_retreat;
 
     return (
       <View key={classItem.id} style={[styles.classCard, isPast && styles.pastClassCard]}>
         <View style={styles.classHeader}>
           <Text style={styles.classTitle}>{classItem.title}</Text>
-          <View style={styles.levelBadge}>
-            <Text style={styles.levelText}>{classItem.level}</Text>
+          <View style={styles.badgeContainer}>
+            {isRetreat && (
+              <View style={styles.retreatBadge}>
+                <Tent size={12} color="white" />
+                <Text style={styles.retreatText}>Retreat</Text>
+              </View>
+            )}
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelText}>{classItem.level}</Text>
+            </View>
           </View>
         </View>
 
@@ -230,13 +287,19 @@ export default function MyScheduleScreen() {
         <View style={styles.classDetails}>
           <View style={styles.detailItem}>
             <Calendar size={16} color="#666" />
-            <Text style={styles.detailText}>{formatDate(classItem.date)}</Text>
+            <Text style={styles.detailText}>
+              {isRetreat 
+                ? formatDateRange(classItem.date, classItem.retreat_end_date)
+                : formatDate(classItem.date)
+              }
+            </Text>
           </View>
 
           <View style={styles.detailItem}>
             <Clock size={16} color="#666" />
             <Text style={styles.detailText}>
-              {formatTime(classItem.time)} ({classItem.duration}min)
+              {formatTime(classItem.time)}
+              {!isRetreat && ` (${classItem.duration}min)`}
             </Text>
           </View>
 
@@ -250,7 +313,7 @@ export default function MyScheduleScreen() {
               styles.detailText,
               isOnline && styles.onlineText
             ]}>
-              {isOnline ? 'Online Class' : classItem.location}
+              {isOnline ? 'Online Experience' : classItem.location}
             </Text>
           </View>
         </View>
@@ -258,9 +321,9 @@ export default function MyScheduleScreen() {
         {/* Booking Statistics */}
         <View style={styles.bookingStats}>
           <View style={styles.statItem}>
-            <Users size={16} color="#C4896F" />
+            <Users size={16} color="#8B7355" />
             <Text style={styles.statText}>
-              {totalBookings}/{classItem.max_participants} enrolled
+              {totalBookings}/{isRetreat ? classItem.retreat_capacity : classItem.max_participants} enrolled
             </Text>
           </View>
           
@@ -273,13 +336,13 @@ export default function MyScheduleScreen() {
         </View>
 
         <View style={styles.classFooter}>
-          <Text style={styles.priceText}>${classItem.price}</Text>
+          <Text style={styles.priceText}>€{classItem.price}</Text>
           {totalBookings > 0 && (
             <TouchableOpacity
               style={styles.viewStudentsButton}
               onPress={() => showStudentList(classItem)}
             >
-              <Eye size={16} color="#C4896F" />
+              <Eye size={16} color="#8B7355" />
               <Text style={styles.viewStudentsText}>View Students</Text>
             </TouchableOpacity>
           )}
@@ -315,6 +378,39 @@ export default function MyScheduleScreen() {
         <Text style={styles.title}>My Schedule</Text>
       </View>
 
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === 'classes' && styles.activeTab
+          ]}
+          onPress={() => setActiveTab('classes')}
+        >
+          <Text style={[
+            styles.tabText,
+            activeTab === 'classes' && styles.activeTabText
+          ]}>
+            Classes
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === 'retreats' && styles.activeTab
+          ]}
+          onPress={() => setActiveTab('retreats')}
+        >
+          <Tent size={16} color={activeTab === 'retreats' ? 'white' : '#666'} />
+          <Text style={[
+            styles.tabText,
+            activeTab === 'retreats' && styles.activeTabText
+          ]}>
+            Retreats
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView 
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
@@ -323,25 +419,62 @@ export default function MyScheduleScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Upcoming Classes */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Classes</Text>
-          {upcomingClasses.length > 0 ? (
-            upcomingClasses.map((classItem) => renderClassCard(classItem, false))
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No upcoming classes scheduled.</Text>
-              <Text style={styles.emptySubtext}>Create a new class to get started!</Text>
+        {activeTab === 'classes' ? (
+          <>
+            {/* Upcoming Classes */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Upcoming Classes</Text>
+              {upcomingClasses.length > 0 ? (
+                upcomingClasses.map((classItem) => renderClassCard(classItem, false))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No upcoming classes scheduled.</Text>
+                  <Text style={styles.emptySubtext}>Create a new class to get started!</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
 
-        {/* Past Classes */}
-        {pastClasses.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Past Classes</Text>
-            {pastClasses.slice(0, 10).map((classItem) => renderClassCard(classItem, true))}
-          </View>
+            {/* Past Classes */}
+            {pastClasses.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Past Classes</Text>
+                {pastClasses.slice(0, 5).map((classItem) => renderClassCard(classItem, true))}
+                {pastClasses.length > 5 && (
+                  <Text style={styles.moreItemsText}>
+                    + {pastClasses.length - 5} more past classes
+                  </Text>
+                )}
+              </View>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Upcoming Retreats */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Upcoming Retreats</Text>
+              {upcomingRetreats.length > 0 ? (
+                upcomingRetreats.map((retreatItem) => renderClassCard(retreatItem, false))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No upcoming retreats scheduled.</Text>
+                  <Text style={styles.emptySubtext}>Create a new retreat to get started!</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Past Retreats */}
+            {pastRetreats.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Past Retreats</Text>
+                {pastRetreats.slice(0, 5).map((retreatItem) => renderClassCard(retreatItem, true))}
+                {pastRetreats.length > 5 && (
+                  <Text style={styles.moreItemsText}>
+                    + {pastRetreats.length - 5} more past retreats
+                  </Text>
+                )}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -353,7 +486,7 @@ export default function MyScheduleScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F4EDE4',
   },
   header: {
     padding: 20,
@@ -367,10 +500,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
   },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    padding: 4,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: '#8B7355',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+  },
+  activeTabText: {
+    color: 'white',
+  },
   content: {
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: 20,
     paddingBottom: 100,
   },
   loadingContainer: {
@@ -394,7 +557,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   section: {
-    padding: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 20,
@@ -430,8 +593,26 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  retreatBadge: {
+    backgroundColor: '#8B7355',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  retreatText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '500',
+  },
   levelBadge: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -444,7 +625,7 @@ const styles = StyleSheet.create({
   },
   classType: {
     fontSize: 14,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '500',
     marginBottom: 16,
   },
@@ -502,7 +683,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#C4896F',
+    color: '#8B7355',
   },
   viewStudentsButton: {
     flexDirection: 'row',
@@ -515,12 +696,14 @@ const styles = StyleSheet.create({
   },
   viewStudentsText: {
     fontSize: 12,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '500',
   },
   emptyState: {
     padding: 40,
     alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
   },
   emptyText: {
     fontSize: 16,
@@ -533,10 +716,16 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
   },
+  moreItemsText: {
+    fontSize: 14,
+    color: '#8B7355',
+    textAlign: 'center',
+    marginTop: 8,
+  },
   // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F4EDE4',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -598,7 +787,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,

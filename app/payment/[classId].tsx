@@ -14,7 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, CreditCard, Calendar, Clock, MapPin, User, Shield } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, Calendar, Clock, MapPin, User, Shield, Tent } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -180,7 +180,7 @@ export default function PaymentScreen() {
           instructorName: yogaClass.profiles?.full_name || 'Unknown Instructor',
           classDate: yogaClass.date,
           classTime: yogaClass.time,
-          price: yogaClass.price.toString()
+          price: getCurrentPrice().toString()
         }
       });
 
@@ -207,16 +207,37 @@ export default function PaymentScreen() {
     });
   };
 
+  const formatDateRange = (startDate: string, endDate?: string) => {
+    if (!endDate) return formatDate(startDate);
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  };
+
   const formatTime = (timeString: string) => {
     const [hours, minutes] = timeString.split(':');
     return `${hours}:${minutes}`;
+  };
+
+  const isEarlyBirdActive = () => {
+    if (!yogaClass?.early_bird_deadline) return false;
+    return new Date(yogaClass.early_bird_deadline) >= new Date();
+  };
+
+  const getCurrentPrice = () => {
+    if (!yogaClass) return 0;
+    return isEarlyBirdActive() && yogaClass.early_bird_price 
+      ? yogaClass.early_bird_price 
+      : yogaClass.price;
   };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#C4896F" />
+          <ActivityIndicator size="large" color="#8B7355" />
           <Text style={styles.loadingText}>Loading payment details...</Text>
         </View>
       </SafeAreaView>
@@ -239,7 +260,8 @@ export default function PaymentScreen() {
   }
 
   const instructorName = yogaClass.profiles?.full_name || 'Unknown Instructor';
-  const isOnline = yogaClass.location.toLowerCase() === 'online';
+  const isOnline = yogaClass.is_virtual || yogaClass.location.toLowerCase() === 'online';
+  const isRetreat = yogaClass.is_retreat;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -271,11 +293,25 @@ export default function PaymentScreen() {
         <View style={styles.imageContainer}>
           <Image
             source={{ 
-              uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+              uri: isRetreat 
+                ? (yogaClass.retreat_image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800')
+                : (yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800')
             }}
             style={styles.classImage}
             resizeMode="cover"
           />
+          {isRetreat && (
+            <View style={styles.durationBadgeContainer}>
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>
+                  {yogaClass.retreat_end_date 
+                    ? Math.ceil((new Date(yogaClass.retreat_end_date).getTime() - new Date(yogaClass.date).getTime()) / (1000 * 60 * 60 * 24)) + 1
+                    : 1
+                  }-Day Retreat
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Class Details Card */}
@@ -285,7 +321,7 @@ export default function PaymentScreen() {
 
           {/* Instructor */}
           <View style={styles.detailRow}>
-            <User size={20} color="#C4896F" />
+            <User size={20} color="#8B7355" />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Instructor</Text>
               <Text style={styles.detailValue}>{instructorName}</Text>
@@ -294,35 +330,46 @@ export default function PaymentScreen() {
 
           {/* Date & Time */}
           <View style={styles.detailRow}>
-            <Calendar size={20} color="#C4896F" />
+            <Calendar size={20} color="#8B7355" />
             <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Date & Time</Text>
+              <Text style={styles.detailLabel}>{isRetreat ? 'Dates' : 'Date'} & Time</Text>
               <Text style={styles.detailValue}>
-                {formatDate(yogaClass.date)} at {formatTime(yogaClass.time)}
+                {isRetreat 
+                  ? formatDateRange(yogaClass.date, yogaClass.retreat_end_date)
+                  : formatDate(yogaClass.date)
+                } at {formatTime(yogaClass.time)}
               </Text>
             </View>
           </View>
 
           {/* Location */}
           <View style={styles.detailRow}>
-            <MapPin size={20} color="#C4896F" />
+            <MapPin size={20} color="#8B7355" />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Location</Text>
               <Text style={[
                 styles.detailValue,
                 isOnline && styles.onlineText
               ]}>
-                {isOnline ? 'Online Class' : yogaClass.location}
+                {isOnline ? 'Online Experience' : yogaClass.location}
               </Text>
             </View>
           </View>
 
           {/* Duration */}
           <View style={styles.detailRow}>
-            <Clock size={20} color="#C4896F" />
+            <Clock size={20} color="#8B7355" />
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Duration</Text>
-              <Text style={styles.detailValue}>{yogaClass.duration} minutes</Text>
+              <Text style={styles.detailValue}>
+                {isRetreat 
+                  ? `${yogaClass.retreat_end_date 
+                      ? Math.ceil((new Date(yogaClass.retreat_end_date).getTime() - new Date(yogaClass.date).getTime()) / (1000 * 60 * 60 * 24)) + 1
+                      : 1
+                    } days`
+                  : `${yogaClass.duration} minutes`
+                }
+              </Text>
             </View>
           </View>
         </View>
@@ -332,15 +379,18 @@ export default function PaymentScreen() {
           <Text style={styles.paymentTitle}>Payment Summary</Text>
           
           <View style={styles.paymentRow}>
-            <Text style={styles.paymentLabel}>Class Fee</Text>
-            <Text style={styles.paymentAmount}>${yogaClass.price}</Text>
+            <Text style={styles.paymentLabel}>
+              {isRetreat ? 'Retreat Fee' : 'Class Fee'}
+              {isEarlyBirdActive() && yogaClass.early_bird_price && ' (Early Bird)'}
+            </Text>
+            <Text style={styles.paymentAmount}>€{getCurrentPrice()}</Text>
           </View>
           
           <View style={styles.paymentDivider} />
           
           <View style={styles.paymentRow}>
             <Text style={styles.paymentTotalLabel}>Total Amount</Text>
-            <Text style={styles.paymentTotalAmount}>${yogaClass.price}</Text>
+            <Text style={styles.paymentTotalAmount}>€{getCurrentPrice()}</Text>
           </View>
         </View>
 
@@ -385,7 +435,7 @@ export default function PaymentScreen() {
             </View>
           ) : (
             <Text style={styles.confirmButtonText}>
-              Confirm Payment - ${yogaClass.price}
+              Confirm Payment - €{getCurrentPrice()}
             </Text>
           )}
         </TouchableOpacity>
@@ -401,7 +451,7 @@ export default function PaymentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F4EDE4',
   },
   header: {
     flexDirection: 'row',
@@ -453,7 +503,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
@@ -485,10 +535,27 @@ const styles = StyleSheet.create({
     marginTop: 20,
     borderRadius: 16,
     overflow: 'hidden',
+    position: 'relative',
   },
   classImage: {
     width: '100%',
     height: '100%',
+  },
+  durationBadgeContainer: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+  },
+  durationBadge: {
+    backgroundColor: 'rgba(139, 115, 85, 0.9)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  durationText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '600',
   },
   detailsCard: {
     backgroundColor: 'white',
@@ -509,7 +576,7 @@ const styles = StyleSheet.create({
   },
   classType: {
     fontSize: 16,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '500',
     marginBottom: 20,
   },
@@ -580,7 +647,7 @@ const styles = StyleSheet.create({
   },
   paymentTotalAmount: {
     fontSize: 20,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '700',
   },
   errorCard: {
@@ -638,7 +705,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E0E0E0',
   },
   confirmButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 25,
     paddingVertical: 16,
     alignItems: 'center',

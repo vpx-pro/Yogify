@@ -14,7 +14,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, MapPin, Globe, Filter, User } from 'lucide-react-native';
+import { Calendar, Clock, MapPin, Globe, Filter, User, Tent } from 'lucide-react-native';
+import RetreatCard from '@/components/RetreatCard';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -28,43 +29,53 @@ type FilterState = {
   type: string;
   level: string;
   date: string;
+  mode: string; // 'all', 'in-person', 'virtual'
+  priceRange: [number, number];
+  duration: string; // 'all', '1-3', '4-7', '7+'
 };
 
 const YOGA_TYPES = ['All', 'Hatha', 'Vinyasa', 'Ashtanga', 'Bikram', 'Hot Yoga', 'Yin Yoga', 'Restorative', 'Power Yoga', 'Kundalini', 'Iyengar'];
 const LEVELS = ['All', 'beginner', 'intermediate', 'advanced'];
+const RETREAT_TYPES = ['All', 'Mindfulness Retreat', 'Yoga & Meditation', 'Wellness Escape', 'Spiritual Journey', 'Detox Retreat', 'Adventure Yoga', 'Healing Retreat', 'Silent Retreat'];
 
 export default function ExploreScreen() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [classes, setClasses] = useState<YogaClass[]>([]);
+  const [retreats, setRetreats] = useState<YogaClass[]>([]);
   const [filteredClasses, setFilteredClasses] = useState<YogaClass[]>([]);
+  const [filteredRetreats, setFilteredRetreats] = useState<YogaClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
+  const [activeTab, setActiveTab] = useState<'classes' | 'retreats'>('classes');
   const [filters, setFilters] = useState<FilterState>({
     type: 'All',
     level: 'All',
-    date: 'All'
+    date: 'All',
+    mode: 'all',
+    priceRange: [0, 1000],
+    duration: 'all'
   });
 
   useEffect(() => {
     if (!authLoading && profile?.role === 'student') {
-      fetchClasses();
+      fetchClassesAndRetreats();
     }
   }, [authLoading, profile]);
 
   useEffect(() => {
     applyFilters();
-  }, [classes, filters]);
+  }, [classes, retreats, filters, activeTab]);
 
   useEffect(() => {
-    if (classes.length > 0) {
+    if (classes.length > 0 || retreats.length > 0) {
       fetchParticipantCounts();
     }
-  }, [classes]);
+  }, [classes, retreats]);
 
-  const fetchClasses = async () => {
+  const fetchClassesAndRetreats = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       
@@ -83,10 +94,15 @@ export default function ExploreScreen() {
 
       if (error) throw error;
       
-      setClasses(data || []);
+      const allData = data || [];
+      const classesData = allData.filter(item => !item.is_retreat);
+      const retreatsData = allData.filter(item => item.is_retreat);
+      
+      setClasses(classesData);
+      setRetreats(retreatsData);
     } catch (error) {
-      console.error('Error fetching classes:', error);
-      Alert.alert('Error', 'Failed to load classes. Please try again.');
+      console.error('Error fetching classes and retreats:', error);
+      Alert.alert('Error', 'Failed to load classes and retreats. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -95,20 +111,19 @@ export default function ExploreScreen() {
 
   const fetchParticipantCounts = async () => {
     try {
-      const classIds = classes.map(cls => cls.id);
+      const allItems = [...classes, ...retreats];
+      const itemIds = allItems.map(item => item.id);
       
-      // Get actual participant counts from bookings
       const { data, error } = await supabase
         .from('bookings')
         .select('class_id')
-        .in('class_id', classIds)
+        .in('class_id', itemIds)
         .eq('status', 'confirmed');
 
       if (error) throw error;
 
-      // Count participants per class
       const counts: Record<string, number> = {};
-      classIds.forEach(id => counts[id] = 0);
+      itemIds.forEach(id => counts[id] = 0);
       
       data?.forEach(booking => {
         counts[booking.class_id] = (counts[booking.class_id] || 0) + 1;
@@ -121,21 +136,53 @@ export default function ExploreScreen() {
   };
 
   const applyFilters = () => {
-    let filtered = [...classes];
+    const sourceData = activeTab === 'classes' ? classes : retreats;
+    let filtered = [...sourceData];
 
     // Filter by type
     if (filters.type !== 'All') {
-      filtered = filtered.filter(cls => cls.type === filters.type);
+      filtered = filtered.filter(item => item.type === filters.type);
     }
 
     // Filter by level
     if (filters.level !== 'All') {
-      filtered = filtered.filter(cls => cls.level === filters.level);
+      filtered = filtered.filter(item => item.level === filters.level);
+    }
+
+    // Filter by mode (in-person/virtual)
+    if (filters.mode === 'in-person') {
+      filtered = filtered.filter(item => !item.is_virtual);
+    } else if (filters.mode === 'virtual') {
+      filtered = filtered.filter(item => item.is_virtual);
+    }
+
+    // Filter by price range
+    filtered = filtered.filter(item => {
+      const price = item.price;
+      return price >= filters.priceRange[0] && price <= filters.priceRange[1];
+    });
+
+    // Filter by duration (for retreats)
+    if (activeTab === 'retreats' && filters.duration !== 'all') {
+      filtered = filtered.filter(item => {
+        if (!item.retreat_end_date) return filters.duration === '1-3';
+        
+        const start = new Date(item.date);
+        const end = new Date(item.retreat_end_date);
+        const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        switch (filters.duration) {
+          case '1-3': return duration >= 1 && duration <= 3;
+          case '4-7': return duration >= 4 && duration <= 7;
+          case '7+': return duration > 7;
+          default: return true;
+        }
+      });
     }
 
     // Filter by date
     if (filters.date !== 'All') {
-      const today = new Date();
+      const today =  new Date();
       const filterDate = new Date(today);
       
       switch (filters.date) {
@@ -147,25 +194,37 @@ export default function ExploreScreen() {
           break;
         case 'This Week':
           filterDate.setDate(today.getDate() + 7);
-          filtered = filtered.filter(cls => {
-            const classDate = new Date(cls.date);
-            return classDate <= filterDate;
+          filtered = filtered.filter(item => {
+            const itemDate = new Date(item.date);
+            return itemDate <= filterDate;
+          });
+          break;
+        case 'This Month':
+          filterDate.setMonth(today.getMonth() + 1);
+          filterDate.setDate(0); // Last day of current month
+          filtered = filtered.filter(item => {
+            const itemDate = new Date(item.date);
+            return itemDate <= filterDate;
           });
           break;
       }
       
       if (filters.date === 'Today' || filters.date === 'Tomorrow') {
         const targetDate = filterDate.toISOString().split('T')[0];
-        filtered = filtered.filter(cls => cls.date === targetDate);
+        filtered = filtered.filter(item => item.date === targetDate);
       }
     }
 
-    setFilteredClasses(filtered);
+    if (activeTab === 'classes') {
+      setFilteredClasses(filtered);
+    } else {
+      setFilteredRetreats(filtered);
+    }
   };
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchClasses();
+    fetchClassesAndRetreats();
   };
 
   const formatDate = (dateString: string) => {
@@ -201,7 +260,8 @@ export default function ExploreScreen() {
 
   const isClassFull = (yogaClass: YogaClass) => {
     const actualCount = participantCounts[yogaClass.id] || yogaClass.current_participants;
-    return actualCount >= yogaClass.max_participants;
+    const maxCapacity = yogaClass.is_retreat ? yogaClass.retreat_capacity : yogaClass.max_participants;
+    return actualCount >= (maxCapacity || yogaClass.max_participants);
   };
 
   const getParticipantCount = (yogaClass: YogaClass) => {
@@ -242,6 +302,122 @@ export default function ExploreScreen() {
     </View>
   );
 
+  const renderModeFilter = () => (
+    <View style={styles.filterGroup}>
+      <Text style={styles.filterLabel}>Mode</Text>
+      <View style={styles.modeToggle}>
+        <TouchableOpacity
+          style={[
+            styles.modeButton,
+            filters.mode === 'all' && styles.modeButtonActive
+          ]}
+          onPress={() => setFilters(prev => ({ ...prev, mode: 'all' }))}
+        >
+          <Text style={[
+            styles.modeButtonText,
+            filters.mode === 'all' && styles.modeButtonTextActive
+          ]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.modeButton,
+            filters.mode === 'in-person' && styles.modeButtonActive
+          ]}
+          onPress={() => setFilters(prev => ({ ...prev, mode: 'in-person' }))}
+        >
+          <MapPin size={16} color={filters.mode === 'in-person' ? 'white' : '#666'} />
+          <Text style={[
+            styles.modeButtonText,
+            filters.mode === 'in-person' && styles.modeButtonTextActive
+          ]}>
+            In-Person
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.modeButton,
+            filters.mode === 'virtual' && styles.modeButtonActive
+          ]}
+          onPress={() => setFilters(prev => ({ ...prev, mode: 'virtual' }))}
+        >
+          <Globe size={16} color={filters.mode === 'virtual' ? 'white' : '#666'} />
+          <Text style={[
+            styles.modeButtonText,
+            filters.mode === 'virtual' && styles.modeButtonTextActive
+          ]}>
+            Virtual
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderDurationFilter = () => (
+    <View style={styles.filterGroup}>
+      <Text style={styles.filterLabel}>Duration</Text>
+      <View style={styles.durationToggle}>
+        <TouchableOpacity
+          style={[
+            styles.durationButton,
+            filters.duration === 'all' && styles.durationButtonActive
+          ]}
+          onPress={() => setFilters(prev => ({ ...prev, duration: 'all' }))}
+        >
+          <Text style={[
+            styles.durationButtonText,
+            filters.duration === 'all' && styles.durationButtonTextActive
+          ]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.durationButton,
+            filters.duration === '1-3' && styles.durationButtonActive
+          ]}
+          onPress={() => setFilters(prev => ({ ...prev, duration: '1-3' }))}
+        >
+          <Text style={[
+            styles.durationButtonText,
+            filters.duration === '1-3' && styles.durationButtonTextActive
+          ]}>
+            1-3 Days
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.durationButton,
+            filters.duration === '4-7' && styles.durationButtonActive
+          ]}
+          onPress={() => setFilters(prev => ({ ...prev, duration: '4-7' }))}
+        >
+          <Text style={[
+            styles.durationButtonText,
+            filters.duration === '4-7' && styles.durationButtonTextActive
+          ]}>
+            4-7 Days
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.durationButton,
+            filters.duration === '7+' && styles.durationButtonActive
+          ]}
+          onPress={() => setFilters(prev => ({ ...prev, duration: '7+' }))}
+        >
+          <Text style={[
+            styles.durationButtonText,
+            filters.duration === '7+' && styles.durationButtonTextActive
+          ]}>
+            7+ Days
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   // Show loading state while auth is loading
   if (authLoading) {
     return (
@@ -279,7 +455,7 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Explore Classes</Text>
+        <Text style={styles.title}>Explore</Text>
         <TouchableOpacity
           style={styles.filterButton}
           onPress={() => setShowFilters(!showFilters)}
@@ -288,11 +464,46 @@ export default function ExploreScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === 'classes' && styles.activeTab
+          ]}
+          onPress={() => setActiveTab('classes')}
+        >
+          <Text style={[
+            styles.tabText,
+            activeTab === 'classes' && styles.activeTabText
+          ]}>
+            Classes
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === 'retreats' && styles.activeTab
+          ]}
+          onPress={() => setActiveTab('retreats')}
+        >
+          <Tent size={16} color={activeTab === 'retreats' ? 'white' : '#666'} />
+          <Text style={[
+            styles.tabText,
+            activeTab === 'retreats' && styles.activeTabText
+          ]}>
+            Retreats
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {showFilters && (
         <View style={styles.filtersContainer}>
+          {renderModeFilter()}
+          
           {renderFilterDropdown(
-            'Type',
-            YOGA_TYPES,
+            activeTab === 'classes' ? 'Type' : 'Retreat Type',
+            activeTab === 'classes' ? YOGA_TYPES : RETREAT_TYPES,
             filters.type,
             (type) => setFilters(prev => ({ ...prev, type }))
           )}
@@ -306,10 +517,12 @@ export default function ExploreScreen() {
           
           {renderFilterDropdown(
             'Date',
-            ['All', 'Today', 'Tomorrow', 'This Week'],
+            ['All', 'Today', 'Tomorrow', 'This Week', 'This Month'],
             filters.date,
             (date) => setFilters(prev => ({ ...prev, date }))
           )}
+
+          {activeTab === 'retreats' && renderDurationFilter()}
         </View>
       )}
 
@@ -321,120 +534,168 @@ export default function ExploreScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {filteredClasses.length > 0 ? (
-          <>
-            <Text style={styles.resultsCount}>
-              {filteredClasses.length} class{filteredClasses.length !== 1 ? 'es' : ''} found
-            </Text>
-            
-            {filteredClasses.map((yogaClass) => {
-              const isFull = isClassFull(yogaClass);
-              const isOnline = yogaClass.location.toLowerCase() === 'online';
-              const participantCount = getParticipantCount(yogaClass);
-              const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
+        {activeTab === 'classes' ? (
+          filteredClasses.length > 0 ? (
+            <>
+              <Text style={styles.resultsCount}>
+                {filteredClasses.length} class{filteredClasses.length !== 1 ? 'es' : ''} found
+              </Text>
               
-              return (
-                <TouchableOpacity
-                  key={yogaClass.id}
-                  style={[styles.classCard, isFull && styles.classCardDisabled]}
-                  onPress={() => handleClassPress(yogaClass.id)}
-                  disabled={isFull}
-                >
-                  {/* Class Image */}
-                  <View style={styles.imageContainer}>
-                    <Image
-                      source={{ 
-                        uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
-                      }}
-                      style={styles.classImage}
-                      resizeMode="cover"
-                    />
-                    {isFull && (
-                      <View style={styles.fullOverlay}>
-                        <Text style={styles.fullOverlayText}>Class Full</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    {/* Teacher Info */}
-                    <View style={styles.teacherInfo}>
-                      <View style={styles.teacherAvatar}>
-                        <User size={16} color="white" />
-                      </View>
-                      <Text style={styles.teacherName}>
-                        {teacherName}
-                      </Text>
+              {filteredClasses.map((yogaClass) => {
+                const isFull = isClassFull(yogaClass);
+                const isOnline = yogaClass.is_virtual || yogaClass.location.toLowerCase() === 'online';
+                const participantCount = getParticipantCount(yogaClass);
+                const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
+                
+                return (
+                  <TouchableOpacity
+                    key={yogaClass.id}
+                    style={[styles.classCard, isFull && styles.classCardDisabled]}
+                    onPress={() => handleClassPress(yogaClass.id)}
+                    disabled={isFull}
+                  >
+                    {/* Class Image */}
+                    <View style={styles.imageContainer}>
+                      <Image
+                        source={{ 
+                          uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+                        }}
+                        style={styles.classImage}
+                        resizeMode="cover"
+                      />
+                      {isFull && (
+                        <View style={styles.fullOverlay}>
+                          <Text style={styles.fullOverlayText}>Class Full</Text>
+                        </View>
+                      )}
                     </View>
 
-                    <View style={styles.classHeader}>
-                      <View style={styles.classHeaderLeft}>
-                        <Text style={styles.classTitle}>{yogaClass.title}</Text>
-                        <Text style={styles.classType}>{yogaClass.type}</Text>
-                      </View>
-                      <View style={[
-                        styles.levelBadge,
-                        isFull && styles.levelBadgeDisabled
-                      ]}>
-                        <Text style={styles.levelText}>{yogaClass.level}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.classDetails}>
-                      <View style={styles.detailItem}>
-                        <Calendar size={14} color="#666" />
-                        <Text style={styles.detailText}>{formatDate(yogaClass.date)}</Text>
-                      </View>
-                      
-                      <View style={styles.detailItem}>
-                        <Clock size={14} color="#666" />
-                        <Text style={styles.detailText}>
-                          {formatTime(yogaClass.time)} • {yogaClass.duration}min
+                    <View style={styles.cardContent}>
+                      {/* Teacher Info */}
+                      <View style={styles.teacherInfo}>
+                        <View style={styles.teacherAvatar}>
+                          <User size={16} color="white" />
+                        </View>
+                        <Text style={styles.teacherName}>
+                          {teacherName}
                         </Text>
                       </View>
-                      
-                      <View style={styles.detailItem}>
-                        {isOnline ? (
-                          <Globe size={14} color="#4CAF50" />
-                        ) : (
-                          <MapPin size={14} color="#666" />
-                        )}
-                        <Text style={[
-                          styles.detailText,
-                          isOnline && styles.onlineText
+
+                      <View style={styles.classHeader}>
+                        <View style={styles.classHeaderLeft}>
+                          <Text style={styles.classTitle}>{yogaClass.title}</Text>
+                          <Text style={styles.classType}>{yogaClass.type}</Text>
+                        </View>
+                        <View style={[
+                          styles.levelBadge,
+                          isFull && styles.levelBadgeDisabled
                         ]}>
-                          {isOnline ? 'Online' : yogaClass.location}
+                          <Text style={styles.levelText}>{yogaClass.level}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.classDetails}>
+                        <View style={styles.detailItem}>
+                          <Calendar size={14} color="#666" />
+                          <Text style={styles.detailText}>{formatDate(yogaClass.date)}</Text>
+                        </View>
+                        
+                        <View style={styles.detailItem}>
+                          <Clock size={14} color="#666" />
+                          <Text style={styles.detailText}>
+                            {formatTime(yogaClass.time)} • {yogaClass.duration}min
+                          </Text>
+                        </View>
+                        
+                        <View style={styles.detailItem}>
+                          {isOnline ? (
+                            <Globe size={14} color="#4CAF50" />
+                          ) : (
+                            <MapPin size={14} color="#666" />
+                          )}
+                          <Text style={[
+                            styles.detailText,
+                            isOnline && styles.onlineText
+                          ]}>
+                            {isOnline ? 'Online' : yogaClass.location}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.classFooter}>
+                        <Text style={styles.priceText}>${yogaClass.price}</Text>
+                        <Text style={[
+                          styles.participantsText,
+                          isFull && styles.fullText
+                        ]}>
+                          {participantCount}/{yogaClass.max_participants}
+                          {isFull && ' (Full)'}
                         </Text>
                       </View>
                     </View>
-
-                    <View style={styles.classFooter}>
-                      <Text style={styles.priceText}>${yogaClass.price}</Text>
-                      <Text style={[
-                        styles.participantsText,
-                        isFull && styles.fullText
-                      ]}>
-                        {participantCount}/{yogaClass.max_participants}
-                        {isFull && ' (Full)'}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </>
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                No classes found matching your filters.
+              </Text>
+              <TouchableOpacity
+                style={styles.clearFiltersButton}
+                onPress={() => setFilters({ 
+                  type: 'All', 
+                  level: 'All', 
+                  date: 'All',
+                  mode: 'all',
+                  priceRange: [0, 1000],
+                  duration: 'all'
+                })}
+              >
+                <Text style={styles.clearFiltersText}>Clear Filters</Text>
+              </TouchableOpacity>
+            </View>
+          )
         ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              No classes found matching your filters.
-            </Text>
-            <TouchableOpacity
-              style={styles.clearFiltersButton}
-              onPress={() => setFilters({ type: 'All', level: 'All', date: 'All' })}
-            >
-              <Text style={styles.clearFiltersText}>Clear Filters</Text>
-            </TouchableOpacity>
-          </View>
+          filteredRetreats.length > 0 ? (
+            <>
+              <Text style={styles.resultsCount}>
+                {filteredRetreats.length} retreat{filteredRetreats.length !== 1 ? 's' : ''} found
+              </Text>
+              
+              {filteredRetreats.map((retreat) => (
+                <RetreatCard
+                  key={retreat.id}
+                  retreat={{
+                    ...retreat,
+                    retreat_capacity: retreat.retreat_capacity || retreat.max_participants,
+                    profiles: retreat.profiles
+                  }}
+                  onPress={() => handleClassPress(retreat.id)}
+                />
+              ))}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                No retreats found matching your filters.
+              </Text>
+              <TouchableOpacity
+                style={styles.clearFiltersButton}
+                onPress={() => setFilters({ 
+                  type: 'All', 
+                  level: 'All', 
+                  date: 'All',
+                  mode: 'all',
+                  priceRange: [0, 1000],
+                  duration: 'all'
+                })}
+              >
+                <Text style={styles.clearFiltersText}>Clear Filters</Text>
+              </TouchableOpacity>
+            </View>
+          )
         )}
       </ScrollView>
     </SafeAreaView>
@@ -444,7 +705,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F4EDE4',
   },
   header: {
     flexDirection: 'row',
@@ -465,6 +726,34 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     backgroundColor: '#F0F0F0',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    padding: 4,
+    marginTop: 16,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: '#8B7355',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+  },
+  activeTabText: {
+    color: 'white',
   },
   filtersContainer: {
     backgroundColor: 'white',
@@ -493,7 +782,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterOptionActive: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
   },
   filterOptionText: {
     fontSize: 14,
@@ -501,6 +790,53 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   filterOptionTextActive: {
+    color: 'white',
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
+  },
+  modeButtonActive: {
+    backgroundColor: '#8B7355',
+  },
+  modeButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  modeButtonTextActive: {
+    color: 'white',
+  },
+  durationToggle: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  durationButton: {
+    backgroundColor: '#F0F0F0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  durationButtonActive: {
+    backgroundColor: '#8B7355',
+  },
+  durationButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  durationButtonTextActive: {
     color: 'white',
   },
   content: {
@@ -589,7 +925,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -617,11 +953,11 @@ const styles = StyleSheet.create({
   },
   classType: {
     fontSize: 14,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '500',
   },
   levelBadge: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -662,7 +998,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#C4896F',
+    color: '#8B7355',
   },
   participantsText: {
     fontSize: 12,
@@ -683,7 +1019,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   clearFiltersButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#8B7355',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, RefreshControl } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, MapPin, Globe, CreditCard, CircleCheck as CheckCircle, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { Calendar, Clock, MapPin, Globe, CreditCard, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Tent } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
 
 type BookingWithClass = Database['public']['Tables']['bookings']['Row'] & {
@@ -16,10 +16,13 @@ type BookingWithClass = Database['public']['Tables']['bookings']['Row'] & {
 
 export default function MyBookingsScreen() {
   const { profile } = useAuth();
-  const [upcomingBookings, setUpcomingBookings] = useState<BookingWithClass[]>([]);
-  const [pastBookings, setPastBookings] = useState<BookingWithClass[]>([]);
+  const [upcomingClasses, setUpcomingClasses] = useState<BookingWithClass[]>([]);
+  const [upcomingRetreats, setUpcomingRetreats] = useState<BookingWithClass[]>([]);
+  const [pastClasses, setPastClasses] = useState<BookingWithClass[]>([]);
+  const [pastRetreats, setPastRetreats] = useState<BookingWithClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'classes' | 'retreats'>('classes');
 
   useEffect(() => {
     if (profile?.id && profile?.role === 'student') {
@@ -50,34 +53,64 @@ export default function MyBookingsScreen() {
       if (error) throw error;
 
       const now = new Date();
-      const upcoming: BookingWithClass[] = [];
-      const past: BookingWithClass[] = [];
+      const upcomingClassesData: BookingWithClass[] = [];
+      const upcomingRetreatsData: BookingWithClass[] = [];
+      const pastClassesData: BookingWithClass[] = [];
+      const pastRetreatsData: BookingWithClass[] = [];
 
       data?.forEach((booking) => {
-        const classDateTime = new Date(`${booking.yoga_classes.date} ${booking.yoga_classes.time}`);
-        if (classDateTime > now) {
-          upcoming.push(booking);
+        // For retreats, use end_date if available
+        const itemEndDate = booking.yoga_classes.is_retreat && booking.yoga_classes.retreat_end_date 
+          ? new Date(`${booking.yoga_classes.retreat_end_date} ${booking.yoga_classes.time}`) 
+          : new Date(`${booking.yoga_classes.date} ${booking.yoga_classes.time}`);
+          
+        const isPast = itemEndDate < now;
+        
+        if (booking.yoga_classes.is_retreat) {
+          if (isPast) {
+            pastRetreatsData.push(booking);
+          } else {
+            upcomingRetreatsData.push(booking);
+          }
         } else {
-          past.push(booking);
+          if (isPast) {
+            pastClassesData.push(booking);
+          } else {
+            upcomingClassesData.push(booking);
+          }
         }
       });
 
       // Sort upcoming by date (earliest first)
-      upcoming.sort((a, b) => {
+      upcomingClassesData.sort((a, b) => {
+        const dateA = new Date(`${a.yoga_classes.date} ${a.yoga_classes.time}`);
+        const dateB = new Date(`${b.yoga_classes.date} ${b.yoga_classes.time}`);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      upcomingRetreatsData.sort((a, b) => {
         const dateA = new Date(`${a.yoga_classes.date} ${a.yoga_classes.time}`);
         const dateB = new Date(`${b.yoga_classes.date} ${b.yoga_classes.time}`);
         return dateA.getTime() - dateB.getTime();
       });
 
       // Sort past by date (most recent first)
-      past.sort((a, b) => {
+      pastClassesData.sort((a, b) => {
         const dateA = new Date(`${a.yoga_classes.date} ${a.yoga_classes.time}`);
         const dateB = new Date(`${b.yoga_classes.date} ${b.yoga_classes.time}`);
         return dateB.getTime() - dateA.getTime();
       });
 
-      setUpcomingBookings(upcoming);
-      setPastBookings(past);
+      pastRetreatsData.sort((a, b) => {
+        const dateA = new Date(`${a.yoga_classes.date} ${a.yoga_classes.time}`);
+        const dateB = new Date(`${b.yoga_classes.date} ${b.yoga_classes.time}`);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      setUpcomingClasses(upcomingClassesData);
+      setUpcomingRetreats(upcomingRetreatsData);
+      setPastClasses(pastClassesData);
+      setPastRetreats(pastRetreatsData);
     } catch (error) {
       console.error('Error fetching bookings:', error);
     } finally {
@@ -109,6 +142,24 @@ export default function MyBookingsScreen() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const formatDateRange = (startDate: string, endDate?: string) => {
+    if (!endDate) return formatDate(startDate);
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+    const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+    const startDay = start.getDate();
+    const endDay = end.getDate();
+
+    if (startMonth === endMonth) {
+      return `${startMonth} ${startDay} - ${endDay}`;
+    } else {
+      return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
+    }
   };
 
   const formatTime = (timeString: string) => {
@@ -143,13 +194,22 @@ export default function MyBookingsScreen() {
   };
 
   const renderBookingCard = (booking: BookingWithClass, isPast: boolean = false) => {
-    const isOnline = booking.yoga_classes.location.toLowerCase() === 'online';
+    const isOnline = booking.yoga_classes.is_virtual || booking.yoga_classes.location.toLowerCase() === 'online';
     const teacherName = booking.yoga_classes.profiles?.full_name || 'Unknown Teacher';
+    const isRetreat = booking.yoga_classes.is_retreat;
 
     return (
       <View key={booking.id} style={[styles.bookingCard, isPast && styles.pastBookingCard]}>
         <View style={styles.bookingHeader}>
-          <Text style={styles.classTitle}>{booking.yoga_classes.title}</Text>
+          <View style={styles.bookingTitleContainer}>
+            <Text style={styles.classTitle}>{booking.yoga_classes.title}</Text>
+            {isRetreat && (
+              <View style={styles.retreatBadge}>
+                <Tent size={12} color="white" />
+                <Text style={styles.retreatText}>Retreat</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.statusContainer}>
             {isPast && (
               <View style={styles.completedBadge}>
@@ -166,13 +226,19 @@ export default function MyBookingsScreen() {
         <View style={styles.classDetails}>
           <View style={styles.detailItem}>
             <Calendar size={16} color="#666" />
-            <Text style={styles.detailText}>{formatDate(booking.yoga_classes.date)}</Text>
+            <Text style={styles.detailText}>
+              {isRetreat 
+                ? formatDateRange(booking.yoga_classes.date, booking.yoga_classes.retreat_end_date)
+                : formatDate(booking.yoga_classes.date)
+              }
+            </Text>
           </View>
 
           <View style={styles.detailItem}>
             <Clock size={16} color="#666" />
             <Text style={styles.detailText}>
-              {formatTime(booking.yoga_classes.time)} ({booking.yoga_classes.duration}min)
+              {formatTime(booking.yoga_classes.time)}
+              {!isRetreat && ` (${booking.yoga_classes.duration}min)`}
             </Text>
           </View>
 
@@ -186,7 +252,7 @@ export default function MyBookingsScreen() {
               styles.detailText,
               isOnline && styles.onlineText
             ]}>
-              {isOnline ? 'Online Class' : booking.yoga_classes.location}
+              {isOnline ? 'Online Experience' : booking.yoga_classes.location}
             </Text>
           </View>
         </View>
@@ -214,7 +280,7 @@ export default function MyBookingsScreen() {
         </View>
 
         <View style={styles.bookingFooter}>
-          <Text style={styles.priceText}>${booking.yoga_classes.price}</Text>
+          <Text style={styles.priceText}>€{booking.yoga_classes.price}</Text>
           <Text style={styles.bookingDate}>
             Booked {new Date(booking.created_at).toLocaleDateString()}
           </Text>
@@ -250,6 +316,39 @@ export default function MyBookingsScreen() {
         <Text style={styles.title}>My Bookings</Text>
       </View>
 
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === 'classes' && styles.activeTab
+          ]}
+          onPress={() => setActiveTab('classes')}
+        >
+          <Text style={[
+            styles.tabText,
+            activeTab === 'classes' && styles.activeTabText
+          ]}>
+            Classes
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === 'retreats' && styles.activeTab
+          ]}
+          onPress={() => setActiveTab('retreats')}
+        >
+          <Tent size={16} color={activeTab === 'retreats' ? 'white' : '#666'} />
+          <Text style={[
+            styles.tabText,
+            activeTab === 'retreats' && styles.activeTabText
+          ]}>
+            Retreats
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView 
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
@@ -258,25 +357,52 @@ export default function MyBookingsScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Upcoming Bookings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Classes</Text>
-          {upcomingBookings.length > 0 ? (
-            upcomingBookings.map((booking) => renderBookingCard(booking, false))
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No upcoming classes booked.</Text>
-              <Text style={styles.emptySubtext}>Book a class to get started!</Text>
+        {activeTab === 'classes' ? (
+          <>
+            {/* Upcoming Classes */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Upcoming Classes</Text>
+              {upcomingClasses.length > 0 ? (
+                upcomingClasses.map((booking) => renderBookingCard(booking, false))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No upcoming classes booked.</Text>
+                  <Text style={styles.emptySubtext}>Book a class to get started!</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
 
-        {/* Past Bookings */}
-        {pastBookings.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Past Classes</Text>
-            {pastBookings.map((booking) => renderBookingCard(booking, true))}
-          </View>
+            {/* Past Classes */}
+            {pastClasses.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Past Classes</Text>
+                {pastClasses.map((booking) => renderBookingCard(booking, true))}
+              </View>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Upcoming Retreats */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Upcoming Retreats</Text>
+              {upcomingRetreats.length > 0 ? (
+                upcomingRetreats.map((booking) => renderBookingCard(booking, false))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No upcoming retreats booked.</Text>
+                  <Text style={styles.emptySubtext}>Book a retreat to get started!</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Past Retreats */}
+            {pastRetreats.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Past Retreats</Text>
+                {pastRetreats.map((booking) => renderBookingCard(booking, true))}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -286,7 +412,7 @@ export default function MyBookingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F4EDE4',
   },
   header: {
     padding: 20,
@@ -300,10 +426,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
   },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    padding: 4,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: '#8B7355',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+  },
+  activeTabText: {
+    color: 'white',
+  },
   content: {
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: 20,
     paddingBottom: 100,
   },
   loadingContainer: {
@@ -327,7 +483,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   section: {
-    padding: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 20,
@@ -356,11 +512,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  bookingTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   classTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
     flex: 1,
+  },
+  retreatBadge: {
+    backgroundColor: '#8B7355',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  retreatText: {
+    fontSize: 10,
+    color: 'white',
+    fontWeight: '500',
   },
   statusContainer: {
     flexDirection: 'row',
@@ -387,7 +563,7 @@ const styles = StyleSheet.create({
   },
   classType: {
     fontSize: 14,
-    color: '#C4896F',
+    color: '#8B7355',
     fontWeight: '500',
     marginBottom: 16,
   },
@@ -447,7 +623,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#C4896F',
+    color: '#8B7355',
   },
   bookingDate: {
     fontSize: 12,
@@ -456,6 +632,8 @@ const styles = StyleSheet.create({
   emptyState: {
     padding: 40,
     alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
   },
   emptyText: {
     fontSize: 16,
