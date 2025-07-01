@@ -321,7 +321,7 @@ export default function MyScheduleScreen() {
         {/* Booking Statistics */}
         <View style={styles.bookingStats}>
           <View style={styles.statItem}>
-            <Users size={16} color="#8B7355" />
+            <User size={16} color="#8B7355" />
             <Text style={styles.statText}>
               {totalBookings}/{isRetreat ? classItem.retreat_capacity : classItem.max_participants} enrolled
             </Text>
