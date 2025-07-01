@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Calendar, User, BookOpen, Search } from 'lucide-react-native';
+import { Chrome as Home, Calendar, User, BookOpen, Search, CalendarDays } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Platform } from 'react-native';
 
@@ -64,7 +64,7 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
-            name="bookings"
+            name="my-bookings"
             options={{
               title: 'My Bookings',
               tabBarIcon: ({ size, color }) => (
@@ -74,6 +74,17 @@ export default function TabLayout() {
           />
         </>
       )}
+      {isTeacher && (
+        <Tabs.Screen
+          name="my-schedule"
+          options={{
+            title: 'My Schedule',
+            tabBarIcon: ({ size, color }) => (
+              <CalendarDays size={size} color={color} />
+            ),
+          }}
+        />
+      )}
       <Tabs.Screen
         name="profile"
         options={{
@@ -81,6 +92,13 @@ export default function TabLayout() {
           tabBarIcon: ({ size, color }) => (
             <User size={size} color={color} />
           ),
+        }}
+      />
+      {/* Hide the old bookings tab since we now have role-specific tabs */}
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          href: null, // This hides the tab
         }}
       />
     </Tabs>
