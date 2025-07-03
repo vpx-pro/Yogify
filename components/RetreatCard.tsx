@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Calendar, MapPin, Globe, Users, Clock } from 'lucide-react-native';
+import { Calendar, MapPin, Globe, Users, Clock, Heart, Star } from 'lucide-react-native';
 import TeacherAvatar from './TeacherAvatar';
 
 interface RetreatCardProps {
@@ -23,16 +23,19 @@ interface RetreatCardProps {
     level: string;
     type: string;
     teacher_id: string;
+    is_favorite?: boolean;
+    average_rating?: number;
     profiles?: {
       full_name: string;
       avatar_url?: string;
     };
   };
   onPress?: () => void;
+  onFavoritePress?: () => void;
   compact?: boolean;
 }
 
-export default function RetreatCard({ retreat, onPress, compact = false }: RetreatCardProps) {
+export default function RetreatCard({ retreat, onPress, onFavoritePress, compact = false }: RetreatCardProps) {
   const getDuration = () => {
     if (!retreat.retreat_end_date) return 1;
     const start = new Date(retreat.date);
@@ -69,6 +72,7 @@ export default function RetreatCard({ retreat, onPress, compact = false }: Retre
   };
 
   const teacherName = retreat.profiles?.full_name || 'Unknown Teacher';
+  const isFavorite = retreat.is_favorite || false;
 
   if (compact) {
     return (
@@ -120,6 +124,19 @@ export default function RetreatCard({ retreat, onPress, compact = false }: Retre
             </View>
           )}
         </View>
+        <TouchableOpacity 
+          style={styles.favoriteButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            if (onFavoritePress) onFavoritePress();
+          }}
+        >
+          <Heart 
+            size={20} 
+            color={isFavorite ? '#FF6B6B' : 'white'} 
+            fill={isFavorite ? '#FF6B6B' : 'transparent'} 
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
@@ -131,7 +148,15 @@ export default function RetreatCard({ retreat, onPress, compact = false }: Retre
             avatarUrl={retreat.profiles?.avatar_url}
             size="SMALL"
           />
-          <Text style={styles.teacherName}>{teacherName}</Text>
+          <View style={styles.teacherDetails}>
+            <Text style={styles.teacherName}>{teacherName}</Text>
+            <View style={styles.ratingContainer}>
+              <Star size={12} color="#FFD700" fill="#FFD700" />
+              <Text style={styles.ratingText}>
+                {retreat.average_rating?.toFixed(1) || '4.8'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         <Text style={styles.title}>{retreat.title}</Text>
@@ -290,6 +315,14 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  favoriteButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 20,
+    padding: 8,
+  },
   content: {
     padding: 16,
   },
@@ -301,11 +334,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  teacherDetails: {
+    marginLeft: 8,
+    flex: 1,
+  },
   teacherName: {
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
-    marginLeft: 8,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: '#666',
   },
   title: {
     fontSize: 20,

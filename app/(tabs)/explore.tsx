@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -9,13 +9,33 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  Image 
+  Image,
+  FlatList,
+  TextInput,
+  Dimensions,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Clock, MapPin, Globe, Filter, User, Tent } from 'lucide-react-native';
+import { 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Globe, 
+  Filter, 
+  User, 
+  Tent, 
+  Search, 
+  Heart, 
+  X, 
+  ChevronDown, 
+  Star, 
+  SlidersHorizontal 
+} from 'lucide-react-native';
 import RetreatCard from '@/components/RetreatCard';
+import TeacherAvatar from '@/components/TeacherAvatar';
+import DateRangePicker from '@/components/DateRangePicker';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -23,20 +43,30 @@ type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
     full_name: string;
     avatar_url?: string;
   };
+  is_favorite?: boolean;
+  average_rating?: number;
 };
 
 type FilterState = {
   type: string;
   level: string;
-  date: string;
+  dateRange: {
+    startDate: Date | null;
+    endDate: Date | null;
+  };
   mode: string; // 'all', 'in-person', 'virtual'
   priceRange: [number, number];
   duration: string; // 'all', '1-3', '4-7', '7+'
+  searchQuery: string;
 };
 
 const YOGA_TYPES = ['All', 'Hatha', 'Vinyasa', 'Ashtanga', 'Bikram', 'Hot Yoga', 'Yin Yoga', 'Restorative', 'Power Yoga', 'Kundalini', 'Iyengar'];
 const LEVELS = ['All', 'beginner', 'intermediate', 'advanced'];
 const RETREAT_TYPES = ['All', 'Mindfulness Retreat', 'Yoga & Meditation', 'Wellness Escape', 'Spiritual Journey', 'Detox Retreat', 'Adventure Yoga', 'Healing Retreat', 'Silent Retreat'];
+
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width < 768 ? width - 40 : (width - 60) / 2;
+const GRID_SPACING = 16;
 
 export default function ExploreScreen() {
   const { profile, loading: authLoading } = useAuth();
@@ -48,26 +78,34 @@ export default function ExploreScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<'classes' | 'retreats'>('classes');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [favoriteTeachers, setFavoriteTeachers] = useState<string[]>([]);
   const [filters, setFilters] = useState<FilterState>({
     type: 'All',
     level: 'All',
-    date: 'All',
+    dateRange: {
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Next 7 days
+    },
     mode: 'all',
     priceRange: [0, 1000],
-    duration: 'all'
+    duration: 'all',
+    searchQuery: ''
   });
 
   useEffect(() => {
     if (!authLoading && profile?.role === 'student') {
       fetchClassesAndRetreats();
+      fetchFavoriteTeachers();
     }
   }, [authLoading, profile]);
 
   useEffect(() => {
     applyFilters();
-  }, [classes, retreats, filters, activeTab]);
+  }, [classes, retreats, filters, activeTab, favoriteTeachers]);
 
   useEffect(() => {
     if (classes.length > 0 || retreats.length > 0) {
@@ -98,14 +136,105 @@ export default function ExploreScreen() {
       const classesData = allData.filter(item => !item.is_retreat);
       const retreatsData = allData.filter(item => item.is_retreat);
       
-      setClasses(classesData);
-      setRetreats(retreatsData);
+      // Fetch average ratings for teachers
+      const teacherIds = [...new Set(allData.map(item => item.teacher_id))];
+      const { data: ratingsData, error: ratingsError } = await supabase
+        .from('teacher_ratings')
+        .select('teacher_id, avg_rating')
+        .in('teacher_id', teacherIds);
+      
+      if (!ratingsError && ratingsData) {
+        const ratingsMap = ratingsData.reduce((acc, curr) => {
+          acc[curr.teacher_id] = curr.avg_rating;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        // Add ratings to classes and retreats
+        const classesWithRatings = classesData.map(cls => ({
+          ...cls,
+          average_rating: ratingsMap[cls.teacher_id] || 0
+        }));
+        
+        const retreatsWithRatings = retreatsData.map(retreat => ({
+          ...retreat,
+          average_rating: ratingsMap[retreat.teacher_id] || 0
+        }));
+        
+        setClasses(classesWithRatings);
+        setRetreats(retreatsWithRatings);
+      } else {
+        setClasses(classesData);
+        setRetreats(retreatsData);
+      }
     } catch (error) {
       console.error('Error fetching classes and retreats:', error);
       Alert.alert('Error', 'Failed to load classes and retreats. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const fetchFavoriteTeachers = async () => {
+    if (!profile?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('saved_teachers')
+        .select('teacher_id')
+        .eq('student_id', profile.id);
+        
+      if (error) throw error;
+      
+      setFavoriteTeachers(data?.map(item => item.teacher_id) || []);
+    } catch (error) {
+      console.error('Error fetching favorite teachers:', error);
+    }
+  };
+
+  const toggleFavoriteTeacher = async (teacherId: string) => {
+    if (!profile?.id) {
+      Alert.alert('Sign In Required', 'Please sign in to save favorite teachers');
+      return;
+    }
+    
+    try {
+      const isFavorite = favoriteTeachers.includes(teacherId);
+      
+      // Optimistic update
+      setFavoriteTeachers(prev => 
+        isFavorite 
+          ? prev.filter(id => id !== teacherId)
+          : [...prev, teacherId]
+      );
+      
+      if (isFavorite) {
+        // Remove from favorites
+        const { error } = await supabase
+          .from('saved_teachers')
+          .delete()
+          .eq('student_id', profile.id)
+          .eq('teacher_id', teacherId);
+          
+        if (error) throw error;
+      } else {
+        // Add to favorites
+        const { error } = await supabase
+          .from('saved_teachers')
+          .insert({
+            student_id: profile.id,
+            teacher_id: teacherId
+          });
+          
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error('Error toggling favorite teacher:', error);
+      
+      // Revert optimistic update on error
+      fetchFavoriteTeachers();
+      
+      Alert.alert('Error', 'Failed to update favorite teachers. Please try again.');
     }
   };
 
@@ -138,6 +267,18 @@ export default function ExploreScreen() {
   const applyFilters = () => {
     const sourceData = activeTab === 'classes' ? classes : retreats;
     let filtered = [...sourceData];
+
+    // Apply search query
+    if (filters.searchQuery.trim()) {
+      const query = filters.searchQuery.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.title.toLowerCase().includes(query) || 
+        item.description.toLowerCase().includes(query) ||
+        item.type.toLowerCase().includes(query) ||
+        item.profiles.full_name.toLowerCase().includes(query) ||
+        item.location.toLowerCase().includes(query)
+      );
+    }
 
     // Filter by type
     if (filters.type !== 'All') {
@@ -180,40 +321,25 @@ export default function ExploreScreen() {
       });
     }
 
-    // Filter by date
-    if (filters.date !== 'All') {
-      const today =  new Date();
-      const filterDate = new Date(today);
+    // Filter by date range
+    if (filters.dateRange.startDate && filters.dateRange.endDate) {
+      const startDate = new Date(filters.dateRange.startDate);
+      startDate.setHours(0, 0, 0, 0);
       
-      switch (filters.date) {
-        case 'Today':
-          filterDate.setDate(today.getDate());
-          break;
-        case 'Tomorrow':
-          filterDate.setDate(today.getDate() + 1);
-          break;
-        case 'This Week':
-          filterDate.setDate(today.getDate() + 7);
-          filtered = filtered.filter(item => {
-            const itemDate = new Date(item.date);
-            return itemDate <= filterDate;
-          });
-          break;
-        case 'This Month':
-          filterDate.setMonth(today.getMonth() + 1);
-          filterDate.setDate(0); // Last day of current month
-          filtered = filtered.filter(item => {
-            const itemDate = new Date(item.date);
-            return itemDate <= filterDate;
-          });
-          break;
-      }
+      const endDate = new Date(filters.dateRange.endDate);
+      endDate.setHours(23, 59, 59, 999);
       
-      if (filters.date === 'Today' || filters.date === 'Tomorrow') {
-        const targetDate = filterDate.toISOString().split('T')[0];
-        filtered = filtered.filter(item => item.date === targetDate);
-      }
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= startDate && itemDate <= endDate;
+      });
     }
+
+    // Add favorite status to filtered items
+    filtered = filtered.map(item => ({
+      ...item,
+      is_favorite: favoriteTeachers.includes(item.teacher_id)
+    }));
 
     if (activeTab === 'classes') {
       setFilteredClasses(filtered);
@@ -225,6 +351,7 @@ export default function ExploreScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchClassesAndRetreats();
+    fetchFavoriteTeachers();
   };
 
   const formatDate = (dateString: string) => {
@@ -270,6 +397,25 @@ export default function ExploreScreen() {
 
   const handleClassPress = (classId: string) => {
     router.push(`/class-detail/${classId}`);
+  };
+
+  const handleTeacherPress = (teacherId: string) => {
+    router.push(`/teacher-profile/${teacherId}`);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      type: 'All', 
+      level: 'All', 
+      dateRange: {
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      },
+      mode: 'all',
+      priceRange: [0, 1000],
+      duration: 'all',
+      searchQuery: ''
+    });
   };
 
   const renderFilterDropdown = (
@@ -418,6 +564,273 @@ export default function ExploreScreen() {
     </View>
   );
 
+  const renderDateFilter = () => (
+    <View style={styles.filterGroup}>
+      <Text style={styles.filterLabel}>Date Range</Text>
+      <TouchableOpacity 
+        style={styles.dateRangeButton}
+        onPress={() => setShowDatePicker(true)}
+      >
+        <Calendar size={16} color="#666" />
+        <Text style={styles.dateRangeText}>
+          {filters.dateRange.startDate?.toLocaleDateString()} - {filters.dateRange.endDate?.toLocaleDateString()}
+        </Text>
+        <ChevronDown size={16} color="#666" />
+      </TouchableOpacity>
+      
+      <DateRangePicker
+        isVisible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        onSave={(range) => {
+          setFilters(prev => ({
+            ...prev,
+            dateRange: range
+          }));
+          setShowDatePicker(false);
+        }}
+        initialRange={filters.dateRange}
+      />
+    </View>
+  );
+
+  const renderClassCard = (yogaClass: YogaClass, index: number) => {
+    const isFull = isClassFull(yogaClass);
+    const isOnline = yogaClass.is_virtual || yogaClass.location.toLowerCase() === 'online';
+    const participantCount = getParticipantCount(yogaClass);
+    const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
+    const isFavorite = favoriteTeachers.includes(yogaClass.teacher_id);
+    
+    if (viewMode === 'grid') {
+      return (
+        <TouchableOpacity
+          key={yogaClass.id}
+          style={[
+            styles.gridCard,
+            isFull && styles.gridCardDisabled,
+            { marginRight: index % 2 === 0 ? GRID_SPACING : 0 }
+          ]}
+          onPress={() => handleClassPress(yogaClass.id)}
+          disabled={isFull}
+        >
+          {/* Class Image */}
+          <View style={styles.gridImageContainer}>
+            <Image
+              source={{ 
+                uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+              }}
+              style={styles.gridImage}
+              resizeMode="cover"
+            />
+            {isFull && (
+              <View style={styles.fullOverlay}>
+                <Text style={styles.fullOverlayText}>Full</Text>
+              </View>
+            )}
+            <TouchableOpacity 
+              style={styles.favoriteButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                toggleFavoriteTeacher(yogaClass.teacher_id);
+              }}
+            >
+              <Heart 
+                size={20} 
+                color={isFavorite ? '#FF6B6B' : 'white'} 
+                fill={isFavorite ? '#FF6B6B' : 'transparent'} 
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.gridCardContent}>
+            {/* Teacher Info */}
+            <TouchableOpacity 
+              style={styles.teacherInfo}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleTeacherPress(yogaClass.teacher_id);
+              }}
+            >
+              <TeacherAvatar
+                teacherId={yogaClass.teacher_id}
+                teacherName={teacherName}
+                avatarUrl={yogaClass.profiles?.avatar_url}
+                size="SMALL"
+              />
+              <View style={styles.teacherDetails}>
+                <Text style={styles.teacherName} numberOfLines={1}>
+                  {teacherName}
+                </Text>
+                <View style={styles.ratingContainer}>
+                  <Star size={12} color="#FFD700" fill="#FFD700" />
+                  <Text style={styles.ratingText}>
+                    {yogaClass.average_rating?.toFixed(1) || '4.8'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <Text style={styles.gridClassTitle} numberOfLines={1}>
+              {yogaClass.title}
+            </Text>
+            
+            <View style={styles.gridClassDetails}>
+              <View style={styles.gridDetailItem}>
+                <Calendar size={12} color="#666" />
+                <Text style={styles.gridDetailText}>{formatDate(yogaClass.date)}</Text>
+              </View>
+              
+              <View style={styles.gridDetailItem}>
+                <Clock size={12} color="#666" />
+                <Text style={styles.gridDetailText}>{formatTime(yogaClass.time)}</Text>
+              </View>
+              
+              <View style={styles.gridDetailItem}>
+                {isOnline ? (
+                  <Globe size={12} color="#4CAF50" />
+                ) : (
+                  <MapPin size={12} color="#666" />
+                )}
+                <Text style={[
+                  styles.gridDetailText,
+                  isOnline && styles.onlineText
+                ]}>
+                  {isOnline ? 'Online' : yogaClass.location}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.gridCardFooter}>
+              <Text style={styles.gridPriceText}>${yogaClass.price}</Text>
+              <View style={styles.capacityContainer}>
+                <Text style={[
+                  styles.capacityText,
+                  isFull && styles.fullText
+                ]}>
+                  {participantCount}/{yogaClass.max_participants}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    } else {
+      // List view
+      return (
+        <TouchableOpacity
+          key={yogaClass.id}
+          style={[styles.listCard, isFull && styles.listCardDisabled]}
+          onPress={() => handleClassPress(yogaClass.id)}
+          disabled={isFull}
+        >
+          {/* Class Image */}
+          <View style={styles.listImageContainer}>
+            <Image
+              source={{ 
+                uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+              }}
+              style={styles.listImage}
+              resizeMode="cover"
+            />
+            {isFull && (
+              <View style={styles.fullOverlay}>
+                <Text style={styles.fullOverlayText}>Full</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.listCardContent}>
+            <View style={styles.listCardHeader}>
+              <View style={styles.listCardTitleContainer}>
+                <Text style={styles.listClassTitle} numberOfLines={1}>
+                  {yogaClass.title}
+                </Text>
+                <Text style={styles.listClassType}>{yogaClass.type}</Text>
+              </View>
+              
+              <TouchableOpacity 
+                onPress={(e) => {
+                  e.stopPropagation();
+                  toggleFavoriteTeacher(yogaClass.teacher_id);
+                }}
+              >
+                <Heart 
+                  size={20} 
+                  color={isFavorite ? '#FF6B6B' : '#CCC'} 
+                  fill={isFavorite ? '#FF6B6B' : 'transparent'} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Teacher Info */}
+            <TouchableOpacity 
+              style={styles.listTeacherInfo}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleTeacherPress(yogaClass.teacher_id);
+              }}
+            >
+              <TeacherAvatar
+                teacherId={yogaClass.teacher_id}
+                teacherName={teacherName}
+                avatarUrl={yogaClass.profiles?.avatar_url}
+                size="SMALL"
+              />
+              <View style={styles.teacherDetails}>
+                <Text style={styles.teacherName} numberOfLines={1}>
+                  {teacherName}
+                </Text>
+                <View style={styles.ratingContainer}>
+                  <Star size={12} color="#FFD700" fill="#FFD700" />
+                  <Text style={styles.ratingText}>
+                    {yogaClass.average_rating?.toFixed(1) || '4.8'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+            
+            <View style={styles.listClassDetails}>
+              <View style={styles.listDetailItem}>
+                <Calendar size={14} color="#666" />
+                <Text style={styles.listDetailText}>{formatDate(yogaClass.date)}</Text>
+              </View>
+              
+              <View style={styles.listDetailItem}>
+                <Clock size={14} color="#666" />
+                <Text style={styles.listDetailText}>{formatTime(yogaClass.time)}</Text>
+              </View>
+              
+              <View style={styles.listDetailItem}>
+                {isOnline ? (
+                  <Globe size={14} color="#4CAF50" />
+                ) : (
+                  <MapPin size={14} color="#666" />
+                )}
+                <Text style={[
+                  styles.listDetailText,
+                  isOnline && styles.onlineText
+                ]}>
+                  {isOnline ? 'Online' : yogaClass.location}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.listCardFooter}>
+              <Text style={styles.listPriceText}>${yogaClass.price}</Text>
+              <View style={styles.capacityContainer}>
+                <Text style={[
+                  styles.capacityText,
+                  isFull && styles.fullText
+                ]}>
+                  {participantCount}/{yogaClass.max_participants}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+  };
+
   // Show loading state while auth is loading
   if (authLoading) {
     return (
@@ -456,12 +869,41 @@ export default function ExploreScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Explore</Text>
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setShowFilters(!showFilters)}
-        >
-          <Filter size={20} color="#C4896F" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.viewModeButton}
+            onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+          >
+            <SlidersHorizontal size={20} color="#8B7355" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setShowFilters(!showFilters)}
+          >
+            <Filter size={20} color="#8B7355" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <Search size={20} color="#999" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search classes, teachers, or locations..."
+            value={filters.searchQuery}
+            onChangeText={(text) => setFilters(prev => ({ ...prev, searchQuery: text }))}
+            placeholderTextColor="#999"
+          />
+          {filters.searchQuery ? (
+            <TouchableOpacity
+              onPress={() => setFilters(prev => ({ ...prev, searchQuery: '' }))}
+            >
+              <X size={20} color="#999" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       {/* Tab Navigation */}
@@ -515,189 +957,66 @@ export default function ExploreScreen() {
             (level) => setFilters(prev => ({ ...prev, level }))
           )}
           
-          {renderFilterDropdown(
-            'Date',
-            ['All', 'Today', 'Tomorrow', 'This Week', 'This Month'],
-            filters.date,
-            (date) => setFilters(prev => ({ ...prev, date }))
-          )}
+          {renderDateFilter()}
 
           {activeTab === 'retreats' && renderDurationFilter()}
+          
+          <TouchableOpacity
+            style={styles.clearFiltersButton}
+            onPress={clearFilters}
+          >
+            <Text style={styles.clearFiltersText}>Clear All Filters</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      <ScrollView 
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
+      <FlatList
+        data={activeTab === 'classes' ? filteredClasses : filteredRetreats}
+        renderItem={({ item, index }) => 
+          activeTab === 'classes' 
+            ? renderClassCard(item, index)
+            : <RetreatCard
+                key={item.id}
+                retreat={{
+                  ...item,
+                  retreat_capacity: item.retreat_capacity || item.max_participants,
+                  profiles: item.profiles,
+                  is_favorite: favoriteTeachers.includes(item.teacher_id)
+                }}
+                onPress={() => handleClassPress(item.id)}
+                onFavoritePress={() => toggleFavoriteTeacher(item.teacher_id)}
+              />
+        }
+        keyExtractor={item => item.id}
+        numColumns={viewMode === 'grid' && width >= 768 ? 2 : 1}
+        key={viewMode === 'grid' && width >= 768 ? 'grid' : 'list'}
+        contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
-      >
-        {activeTab === 'classes' ? (
-          filteredClasses.length > 0 ? (
-            <>
-              <Text style={styles.resultsCount}>
-                {filteredClasses.length} class{filteredClasses.length !== 1 ? 'es' : ''} found
-              </Text>
-              
-              {filteredClasses.map((yogaClass) => {
-                const isFull = isClassFull(yogaClass);
-                const isOnline = yogaClass.is_virtual || yogaClass.location.toLowerCase() === 'online';
-                const participantCount = getParticipantCount(yogaClass);
-                const teacherName = yogaClass.profiles?.full_name || 'Unknown Teacher';
-                
-                return (
-                  <TouchableOpacity
-                    key={yogaClass.id}
-                    style={[styles.classCard, isFull && styles.classCardDisabled]}
-                    onPress={() => handleClassPress(yogaClass.id)}
-                    disabled={isFull}
-                  >
-                    {/* Class Image */}
-                    <View style={styles.imageContainer}>
-                      <Image
-                        source={{ 
-                          uri: yogaClass.image_url || 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
-                        }}
-                        style={styles.classImage}
-                        resizeMode="cover"
-                      />
-                      {isFull && (
-                        <View style={styles.fullOverlay}>
-                          <Text style={styles.fullOverlayText}>Class Full</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.cardContent}>
-                      {/* Teacher Info */}
-                      <View style={styles.teacherInfo}>
-                        <View style={styles.teacherAvatar}>
-                          <User size={16} color="white" />
-                        </View>
-                        <Text style={styles.teacherName}>
-                          {teacherName}
-                        </Text>
-                      </View>
-
-                      <View style={styles.classHeader}>
-                        <View style={styles.classHeaderLeft}>
-                          <Text style={styles.classTitle}>{yogaClass.title}</Text>
-                          <Text style={styles.classType}>{yogaClass.type}</Text>
-                        </View>
-                        <View style={[
-                          styles.levelBadge,
-                          isFull && styles.levelBadgeDisabled
-                        ]}>
-                          <Text style={styles.levelText}>{yogaClass.level}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.classDetails}>
-                        <View style={styles.detailItem}>
-                          <Calendar size={14} color="#666" />
-                          <Text style={styles.detailText}>{formatDate(yogaClass.date)}</Text>
-                        </View>
-                        
-                        <View style={styles.detailItem}>
-                          <Clock size={14} color="#666" />
-                          <Text style={styles.detailText}>
-                            {formatTime(yogaClass.time)} • {yogaClass.duration}min
-                          </Text>
-                        </View>
-                        
-                        <View style={styles.detailItem}>
-                          {isOnline ? (
-                            <Globe size={14} color="#4CAF50" />
-                          ) : (
-                            <MapPin size={14} color="#666" />
-                          )}
-                          <Text style={[
-                            styles.detailText,
-                            isOnline && styles.onlineText
-                          ]}>
-                            {isOnline ? 'Online' : yogaClass.location}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.classFooter}>
-                        <Text style={styles.priceText}>${yogaClass.price}</Text>
-                        <Text style={[
-                          styles.participantsText,
-                          isFull && styles.fullText
-                        ]}>
-                          {participantCount}/{yogaClass.max_participants}
-                          {isFull && ' (Full)'}
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                No classes found matching your filters.
-              </Text>
-              <TouchableOpacity
-                style={styles.clearFiltersButton}
-                onPress={() => setFilters({ 
-                  type: 'All', 
-                  level: 'All', 
-                  date: 'All',
-                  mode: 'all',
-                  priceRange: [0, 1000],
-                  duration: 'all'
-                })}
-              >
-                <Text style={styles.clearFiltersText}>Clear Filters</Text>
-              </TouchableOpacity>
-            </View>
-          )
-        ) : (
-          filteredRetreats.length > 0 ? (
-            <>
-              <Text style={styles.resultsCount}>
-                {filteredRetreats.length} retreat{filteredRetreats.length !== 1 ? 's' : ''} found
-              </Text>
-              
-              {filteredRetreats.map((retreat) => (
-                <RetreatCard
-                  key={retreat.id}
-                  retreat={{
-                    ...retreat,
-                    retreat_capacity: retreat.retreat_capacity || retreat.max_participants,
-                    profiles: retreat.profiles
-                  }}
-                  onPress={() => handleClassPress(retreat.id)}
-                />
-              ))}
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                No retreats found matching your filters.
-              </Text>
-              <TouchableOpacity
-                style={styles.clearFiltersButton}
-                onPress={() => setFilters({ 
-                  type: 'All', 
-                  level: 'All', 
-                  date: 'All',
-                  mode: 'all',
-                  priceRange: [0, 1000],
-                  duration: 'all'
-                })}
-              >
-                <Text style={styles.clearFiltersText}>Clear Filters</Text>
-              </TouchableOpacity>
-            </View>
-          )
+        ListHeaderComponent={() => (
+          <Text style={styles.resultsCount}>
+            {activeTab === 'classes' 
+              ? `${filteredClasses.length} class${filteredClasses.length !== 1 ? 'es' : ''} found`
+              : `${filteredRetreats.length} retreat${filteredRetreats.length !== 1 ? 's' : ''} found`
+            }
+          </Text>
         )}
-      </ScrollView>
+        ListEmptyComponent={() => (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>
+              No {activeTab} found matching your filters.
+            </Text>
+            <TouchableOpacity
+              style={styles.clearFiltersButton}
+              onPress={clearFilters}
+            >
+              <Text style={styles.clearFiltersText}>Clear Filters</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      />
     </SafeAreaView>
   );
 }
@@ -722,10 +1041,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  viewModeButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
   filterButton: {
     padding: 8,
     borderRadius: 8,
     backgroundColor: '#F0F0F0',
+  },
+  searchContainer: {
+    padding: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 8,
+    paddingVertical: 8,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -839,10 +1188,35 @@ const styles = StyleSheet.create({
   durationButtonTextActive: {
     color: 'white',
   },
-  content: {
-    flex: 1,
+  dateRangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  scrollContent: {
+  dateRangeText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  clearFiltersButton: {
+    backgroundColor: '#8B7355',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  clearFiltersText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
+  },
+  listContent: {
     padding: 20,
     paddingBottom: 100,
   },
@@ -872,7 +1246,8 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  classCard: {
+  // Grid Card Styles
+  gridCard: {
     backgroundColor: 'white',
     borderRadius: 16,
     marginBottom: 20,
@@ -882,15 +1257,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     overflow: 'hidden',
+    width: width < 768 ? '100%' : (width - 60) / 2,
   },
-  classCardDisabled: {
+  gridCardDisabled: {
     opacity: 0.7,
   },
-  imageContainer: {
+  gridImageContainer: {
     position: 'relative',
-    height: 200,
+    height: 180,
   },
-  classImage: {
+  gridImage: {
     width: '100%',
     height: '100%',
   },
@@ -913,7 +1289,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
   },
-  cardContent: {
+  favoriteButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  gridCardContent: {
     padding: 16,
   },
   teacherInfo: {
@@ -921,68 +1305,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  teacherAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#8B7355',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
+  teacherDetails: {
+    marginLeft: 8,
+    flex: 1,
   },
   teacherName: {
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
   },
-  classHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  classHeaderLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  classTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  classType: {
-    fontSize: 14,
-    color: '#8B7355',
-    fontWeight: '500',
-  },
-  levelBadge: {
-    backgroundColor: '#8B7355',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  levelBadgeDisabled: {
-    backgroundColor: '#999',
-  },
-  levelText: {
-    fontSize: 12,
-    color: 'white',
-    fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  classDetails: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  detailItem: {
+  ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  detailText: {
+  ratingText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  gridClassTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  gridClassDetails: {
+    gap: 6,
+    marginBottom: 12,
+  },
+  gridDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gridDetailText: {
     fontSize: 12,
     color: '#666',
   },
@@ -990,23 +1346,105 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontWeight: '500',
   },
-  classFooter: {
+  gridCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  priceText: {
-    fontSize: 20,
+  gridPriceText: {
+    fontSize: 18,
     fontWeight: '700',
     color: '#8B7355',
   },
-  participantsText: {
+  capacityContainer: {
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  capacityText: {
     fontSize: 12,
     color: '#666',
+    fontWeight: '500',
   },
   fullText: {
     color: '#FF6B6B',
+  },
+  // List Card Styles
+  listCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  listCardDisabled: {
+    opacity: 0.7,
+  },
+  listImageContainer: {
+    width: 120,
+    height: '100%',
+  },
+  listImage: {
+    width: '100%',
+    height: '100%',
+  },
+  listCardContent: {
+    flex: 1,
+    padding: 16,
+  },
+  listCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  listCardTitleContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  listClassTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  listClassType: {
+    fontSize: 12,
+    color: '#8B7355',
     fontWeight: '500',
+  },
+  listTeacherInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  listClassDetails: {
+    gap: 4,
+    marginBottom: 8,
+  },
+  listDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  listDetailText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  listCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  listPriceText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#8B7355',
   },
   emptyState: {
     padding: 40,
@@ -1017,16 +1455,5 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginBottom: 20,
-  },
-  clearFiltersButton: {
-    backgroundColor: '#8B7355',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  clearFiltersText: {
-    fontSize: 14,
-    color: 'white',
-    fontWeight: '500',
   },
 });

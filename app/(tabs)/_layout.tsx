@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Calendar, User, BookOpen, Search, CalendarDays } from 'lucide-react-native';
+import { Chrome as Home, Calendar, User, BookOpen, Search, CalendarDays, Heart } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Platform } from 'react-native';
 

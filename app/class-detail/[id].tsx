@@ -14,7 +14,22 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Globe, DollarSign, Star, CircleCheck as CheckCircle, User, Tent } from 'lucide-react-native';
+import { 
+  ArrowLeft, 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Users, 
+  Globe, 
+  DollarSign, 
+  Star, 
+  CircleCheck as CheckCircle, 
+  User, 
+  Tent, 
+  Heart, 
+  MessageSquare 
+} from 'lucide-react-native';
+import TeacherAvatar from '@/components/TeacherAvatar';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -26,6 +41,14 @@ type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 
+type Review = {
+  id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  student_name: string;
+};
+
 export default function ClassDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const { profile } = useAuth();
@@ -35,6 +58,11 @@ export default function ClassDetailScreen() {
   const [booking, setBooking] = useState(false);
   const [existingBooking, setExistingBooking] = useState<Booking | null>(null);
   const [actualParticipantCount, setActualParticipantCount] = useState(0);
+  const [isFavoriteTeacher, setIsFavoriteTeacher] = useState(false);
+  const [loadingFavorite, setLoadingFavorite] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [canReview, setCanReview] = useState(false);
 
   // Ensure id is a valid string
   const id = typeof params.id === 'string' ? params.id : null;
@@ -44,10 +72,18 @@ export default function ClassDetailScreen() {
       fetchClassDetails();
       checkExistingBooking();
       fetchActualParticipantCount();
+      fetchReviews();
     } else {
       setLoading(false);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (yogaClass?.teacher_id && profile?.id) {
+      checkIfFavoriteTeacher();
+      checkIfCanReview();
+    }
+  }, [yogaClass, profile]);
 
   const fetchClassDetails = async () => {
     if (!id) return;
@@ -116,6 +152,124 @@ export default function ClassDetailScreen() {
       }
     } catch (error) {
       console.error('Error checking existing booking:', error);
+    }
+  };
+
+  const checkIfFavoriteTeacher = async () => {
+    if (!profile?.id || !yogaClass?.teacher_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('saved_teachers')
+        .select('id')
+        .eq('student_id', profile.id)
+        .eq('teacher_id', yogaClass.teacher_id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setIsFavoriteTeacher(!!data);
+    } catch (error) {
+      console.error('Error checking favorite teacher status:', error);
+    }
+  };
+
+  const toggleFavoriteTeacher = async () => {
+    if (!profile?.id || !yogaClass?.teacher_id) {
+      Alert.alert('Sign In Required', 'Please sign in to save favorite teachers');
+      return;
+    }
+    
+    setLoadingFavorite(true);
+    
+    try {
+      // Optimistic update
+      setIsFavoriteTeacher(!isFavoriteTeacher);
+      
+      if (isFavoriteTeacher) {
+        // Remove from favorites
+        const { error } = await supabase
+          .from('saved_teachers')
+          .delete()
+          .eq('student_id', profile.id)
+          .eq('teacher_id', yogaClass.teacher_id);
+          
+        if (error) throw error;
+      } else {
+        // Add to favorites
+        const { error } = await supabase
+          .from('saved_teachers')
+          .insert({
+            student_id: profile.id,
+            teacher_id: yogaClass.teacher_id
+          });
+          
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error('Error toggling favorite teacher:', error);
+      
+      // Revert optimistic update on error
+      setIsFavoriteTeacher(!isFavoriteTeacher);
+      Alert.alert('Error', 'Failed to update favorite status. Please try again.');
+    } finally {
+      setLoadingFavorite(false);
+    }
+  };
+
+  const fetchReviews = async () => {
+    if (!id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('teacher_reviews')
+        .select(`
+          id,
+          rating,
+          comment,
+          created_at,
+          profiles!teacher_reviews_student_id_fkey (
+            full_name
+          )
+        `)
+        .eq('class_id', id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const formattedReviews = data.map(review => ({
+          id: review.id,
+          rating: review.rating,
+          comment: review.comment,
+          created_at: review.created_at,
+          student_name: review.profiles?.full_name || 'Anonymous Student'
+        }));
+        
+        setReviews(formattedReviews);
+        
+        // Calculate average rating
+        const total = data.reduce((sum, review) => sum + review.rating, 0);
+        setAverageRating(total / data.length);
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+    }
+  };
+
+  const checkIfCanReview = async () => {
+    if (!profile?.id || !id) return;
+    
+    try {
+      const { data, error } = await supabase.rpc('can_student_review_class', {
+        p_student_id: profile.id,
+        p_class_id: id
+      });
+
+      if (error) throw error;
+      setCanReview(data.can_review);
+    } catch (error) {
+      console.error('Error checking review eligibility:', error);
+      setCanReview(false);
     }
   };
 
@@ -271,6 +425,16 @@ export default function ClassDetailScreen() {
     }
   };
 
+  const handleWriteReview = () => {
+    router.push(`/write-review/${id}`);
+  };
+
+  const handleViewTeacherProfile = () => {
+    if (yogaClass?.teacher_id) {
+      router.push(`/teacher-profile/${yogaClass.teacher_id}`);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -311,6 +475,28 @@ export default function ClassDetailScreen() {
     });
   };
 
+  const formatReviewDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) {
+      return 'yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
+    } else if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return `${months} ${months === 1 ? 'month' : 'months'} ago`;
+    } else {
+      const years = Math.floor(diffDays / 365);
+      return `${years} ${years === 1 ? 'year' : 'years'} ago`;
+    }
+  };
+
   const isClassFull = () => {
     if (!yogaClass) return false;
     const maxCapacity = yogaClass.is_retreat ? yogaClass.retreat_capacity : yogaClass.max_participants;
@@ -344,6 +530,38 @@ export default function ClassDetailScreen() {
     const start = new Date(yogaClass.date);
     const end = new Date(yogaClass.retreat_end_date);
     return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const renderRatingStars = (rating: number) => {
+    return (
+      <View style={styles.starsContainer}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star 
+            key={star} 
+            size={16} 
+            color="#FFD700" 
+            fill={star <= rating ? "#FFD700" : "transparent"} 
+          />
+        ))}
+      </View>
+    );
+  };
+
+  const renderReviewCard = (review: Review) => {
+    return (
+      <View key={review.id} style={styles.reviewCard}>
+        <View style={styles.reviewHeader}>
+          <Text style={styles.reviewerName}>{review.student_name}</Text>
+          <Text style={styles.reviewDate}>{formatReviewDate(review.created_at)}</Text>
+        </View>
+        
+        {renderRatingStars(review.rating)}
+        
+        {review.comment && (
+          <Text style={styles.reviewComment}>{review.comment}</Text>
+        )}
+      </View>
+    );
   };
 
   if (loading) {
@@ -415,24 +633,69 @@ export default function ClassDetailScreen() {
               </View>
             </View>
           )}
+          {reviews.length > 0 && (
+            <View style={styles.ratingBadgeContainer}>
+              <View style={styles.ratingBadge}>
+                <Star size={12} color="white" fill="white" />
+                <Text style={styles.ratingText}>{averageRating.toFixed(1)}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Teacher Info */}
         <View style={styles.teacherSection}>
-          <View style={styles.teacherInfo}>
-            <View style={styles.teacherAvatar}>
-              <User size={24} color="white" />
-            </View>
+          <TouchableOpacity 
+            style={styles.teacherInfo}
+            onPress={handleViewTeacherProfile}
+          >
+            <TeacherAvatar
+              teacherId={yogaClass.teacher_id}
+              teacherName={teacherName}
+              avatarUrl={yogaClass.profiles?.avatar_url}
+              size="MEDIUM"
+            />
             <View style={styles.teacherDetails}>
               <Text style={styles.teacherName}>
                 {teacherName}
               </Text>
-              <View style={styles.teacherRating}>
-                <Star size={14} color="#FFD700" fill="#FFD700" />
-                <Text style={styles.ratingText}>4.8 (127 reviews)</Text>
-              </View>
+              {reviews.length > 0 && (
+                <View style={styles.teacherRating}>
+                  {renderRatingStars(averageRating)}
+                  <Text style={styles.reviewsCount}>({reviews.length})</Text>
+                </View>
+              )}
             </View>
-          </View>
+          </TouchableOpacity>
+          
+          {profile?.role === 'student' && (
+            <TouchableOpacity 
+              style={[
+                styles.favoriteTeacherButton,
+                isFavoriteTeacher && styles.favoriteTeacherButtonActive
+              ]}
+              onPress={toggleFavoriteTeacher}
+              disabled={loadingFavorite}
+            >
+              {loadingFavorite ? (
+                <ActivityIndicator size="small" color={isFavoriteTeacher ? 'white' : '#8B7355'} />
+              ) : (
+                <>
+                  <Heart 
+                    size={16} 
+                    color={isFavoriteTeacher ? 'white' : '#8B7355'} 
+                    fill={isFavoriteTeacher ? 'white' : 'transparent'} 
+                  />
+                  <Text style={[
+                    styles.favoriteTeacherText,
+                    isFavoriteTeacher && styles.favoriteTeacherTextActive
+                  ]}>
+                    {isFavoriteTeacher ? 'Saved' : 'Save'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Class Header */}
@@ -560,6 +823,42 @@ export default function ClassDetailScreen() {
             <Text style={styles.description}>{yogaClass.description}</Text>
           </View>
         )}
+
+        {/* Reviews Section */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <Text style={styles.sectionTitle}>Reviews</Text>
+            {canReview && profile?.role === 'student' && (
+              <TouchableOpacity 
+                style={styles.writeReviewButton}
+                onPress={handleWriteReview}
+              >
+                <MessageSquare size={16} color="#8B7355" />
+                <Text style={styles.writeReviewText}>Write Review</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          {reviews.length > 0 ? (
+            <View style={styles.reviewsList}>
+              {reviews.slice(0, 3).map(review => renderReviewCard(review))}
+              {reviews.length > 3 && (
+                <TouchableOpacity 
+                  style={styles.viewAllReviewsButton}
+                  onPress={handleViewTeacherProfile}
+                >
+                  <Text style={styles.viewAllReviewsText}>
+                    View all {reviews.length} reviews
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <View style={styles.noReviewsContainer}>
+              <Text style={styles.noReviewsText}>No reviews yet</Text>
+            </View>
+          )}
+        </View>
 
         {/* Booking Status */}
         {existingBooking && (
@@ -707,25 +1006,39 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  ratingBadgeContainer: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 115, 85, 0.9)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '600',
+  },
   teacherSection: {
     backgroundColor: 'white',
     padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   teacherInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  teacherAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#8B7355',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
+    flex: 1,
   },
   teacherDetails: {
-    flex: 1,
+    marginLeft: 16,
   },
   teacherName: {
     fontSize: 18,
@@ -736,11 +1049,34 @@ const styles = StyleSheet.create({
   teacherRating: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
-  ratingText: {
+  starsContainer: {
+    flexDirection: 'row',
+  },
+  reviewsCount: {
     fontSize: 14,
     color: '#666',
+    marginLeft: 4,
+  },
+  favoriteTeacherButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  favoriteTeacherButtonActive: {
+    backgroundColor: '#FF6B6B',
+  },
+  favoriteTeacherText: {
+    fontSize: 14,
+    color: '#8B7355',
+    fontWeight: '500',
+  },
+  favoriteTeacherTextActive: {
+    color: 'white',
   },
   classHeader: {
     backgroundColor: 'white',
@@ -894,6 +1230,79 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     lineHeight: 24,
+  },
+  reviewsSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginTop: 8,
+  },
+  reviewsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  writeReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  writeReviewText: {
+    fontSize: 14,
+    color: '#8B7355',
+    fontWeight: '500',
+  },
+  reviewsList: {
+    gap: 16,
+  },
+  reviewCard: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  reviewerName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  reviewComment: {
+    fontSize: 14,
+    color: '#333',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  viewAllReviewsButton: {
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  viewAllReviewsText: {
+    fontSize: 14,
+    color: '#8B7355',
+    fontWeight: '500',
+  },
+  noReviewsContainer: {
+    padding: 16,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  noReviewsText: {
+    fontSize: 14,
+    color: '#666',
   },
   bookingStatus: {
     backgroundColor: '#E8F5E8',
