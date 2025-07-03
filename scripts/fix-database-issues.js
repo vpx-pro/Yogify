@@ -1,6 +1,6 @@
 /**
  * Yogify Database Issue Fixer
- * Identifies and fixes common database issues
+ * Identifies and fixes common database issues using secure functions
  */
 
 require('dotenv').config();
@@ -25,14 +25,35 @@ class DatabaseFixer {
     this.fixes = [];
   }
 
+  async authenticateAsTestUser() {
+    try {
+      // Try to sign in as a test user for operations that require authentication
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: 't1@yogify.com',
+        password: 'TestTeacher1!'
+      });
+      
+      if (error) {
+        console.log('Note: Could not authenticate as test user, some operations may be limited');
+        return false;
+      }
+      
+      console.log('✅ Authenticated as test user for secure operations');
+      return true;
+    } catch (error) {
+      console.log('Note: Authentication not available, some operations may be limited');
+      return false;
+    }
+  }
+
   async fixParticipantCounts() {
-    console.log('🔧 Fixing participant counts...');
+    console.log('🔧 Fixing participant counts using secure functions...');
     
     try {
       // Get all classes
       const { data: classes, error: classesError } = await supabase
         .from('yoga_classes')
-        .select('id, current_participants')
+        .select('id, current_participants, title')
         .order('date', { ascending: false })
         .limit(100);
         
@@ -41,60 +62,41 @@ class DatabaseFixer {
       let fixedCount = 0;
       
       for (const cls of classes) {
-        // Count confirmed bookings
-        const { count, error: countError } = await supabase
-          .from('bookings')
-          .select('*', { count: 'exact', head: true })
-          .eq('class_id', cls.id)
-          .eq('status', 'confirmed');
+        try {
+          // Use the secure function to sync participant count
+          const { error: syncError } = await supabase.rpc('sync_participant_count', {
+            class_id_param: cls.id
+          });
           
-        if (countError) {
-          console.log(`Warning: Could not count bookings for class ${cls.id}: ${countError.message}`);
-          continue;
-        }
-        
-        if (count !== cls.current_participants) {
-          // Fix the inconsistency
-          const { error: updateError } = await supabase
-            .from('yoga_classes')
-            .update({ current_participants: count })
-            .eq('id', cls.id);
-            
-          if (updateError) {
-            console.log(`Warning: Could not fix participant count for class ${cls.id}: ${updateError.message}`);
+          if (syncError) {
+            console.log(`Warning: Could not sync participant count for class ${cls.title}: ${syncError.message}`);
             this.issues.push({
-              type: 'participant_count',
+              type: 'participant_count_sync',
               class_id: cls.id,
-              error: updateError.message
+              class_title: cls.title,
+              error: syncError.message
             });
           } else {
             fixedCount++;
             this.fixes.push({
-              type: 'participant_count',
+              type: 'participant_count_sync',
               class_id: cls.id,
-              old_count: cls.current_participants,
-              new_count: count
+              class_title: cls.title,
+              action: 'synced'
             });
-            
-            // Add audit record
-            try {
-              await supabase
-                .from('participant_count_audit')
-                .insert([{
-                  class_id: cls.id,
-                  action: 'sync',
-                  old_count: cls.current_participants,
-                  new_count: count,
-                  reason: 'Automated fix'
-                }]);
-            } catch (auditError) {
-              console.log(`Warning: Could not create audit record: ${auditError.message}`);
-            }
           }
+        } catch (error) {
+          console.log(`Warning: Error syncing participant count for class ${cls.title}: ${error.message}`);
+          this.issues.push({
+            type: 'participant_count_sync',
+            class_id: cls.id,
+            class_title: cls.title,
+            error: error.message
+          });
         }
       }
       
-      console.log(`✅ Fixed ${fixedCount} participant count inconsistencies`);
+      console.log(`✅ Synced participant counts for ${fixedCount} classes`);
       return fixedCount;
     } catch (error) {
       console.error(`❌ Error fixing participant counts: ${error.message}`);
@@ -149,46 +151,7 @@ class DatabaseFixer {
         console.log('✅ No orphaned teacher profiles found');
       }
       
-      // Check for orphaned teacher_ratings
-      const { data: orphanedRatings, error: ratingsError } = await supabase
-        .from('teacher_ratings')
-        .select(`
-          teacher_id,
-          profiles!left (id)
-        `)
-        .is('profiles.id', null);
-        
-      if (ratingsError) throw ratingsError;
-      
-      if (orphanedRatings && orphanedRatings.length > 0) {
-        console.log(`Found ${orphanedRatings.length} orphaned teacher ratings`);
-        
-        for (const rating of orphanedRatings) {
-          const { error: deleteError } = await supabase
-            .from('teacher_ratings')
-            .delete()
-            .eq('teacher_id', rating.teacher_id);
-            
-          if (deleteError) {
-            console.log(`Warning: Could not delete orphaned teacher rating ${rating.teacher_id}: ${deleteError.message}`);
-            this.issues.push({
-              type: 'orphaned_rating',
-              teacher_id: rating.teacher_id,
-              error: deleteError.message
-            });
-          } else {
-            this.fixes.push({
-              type: 'orphaned_rating',
-              teacher_id: rating.teacher_id,
-              action: 'deleted'
-            });
-          }
-        }
-      } else {
-        console.log('✅ No orphaned teacher ratings found');
-      }
-      
-      return this.fixes.filter(f => f.type === 'orphaned_profile' || f.type === 'orphaned_rating').length;
+      return this.fixes.filter(f => f.type === 'orphaned_profile').length;
     } catch (error) {
       console.error(`❌ Error fixing orphaned records: ${error.message}`);
       this.issues.push({
@@ -246,20 +209,6 @@ class DatabaseFixer {
               teacher_id: teacher.id,
               action: 'created'
             });
-            
-            // Create teacher rating
-            const { error: ratingError } = await supabase
-              .from('teacher_ratings')
-              .insert([{
-                teacher_id: teacher.id,
-                avg_rating: 5.0,
-                total_reviews: 0,
-                rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
-              }]);
-              
-            if (ratingError) {
-              console.log(`Warning: Could not create teacher rating for ${teacher.id}: ${ratingError.message}`);
-            }
           }
         }
       } else {
@@ -277,75 +226,14 @@ class DatabaseFixer {
     }
   }
 
-  async fixMissingTeacherRatings() {
-    console.log('🔧 Fixing missing teacher ratings...');
-    
-    try {
-      // Find teachers without ratings
-      const { data: teachersWithoutRatings, error } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          full_name,
-          teacher_ratings!left (teacher_id)
-        `)
-        .eq('role', 'teacher')
-        .is('teacher_ratings.teacher_id', null);
-        
-      if (error) throw error;
-      
-      if (teachersWithoutRatings && teachersWithoutRatings.length > 0) {
-        console.log(`Found ${teachersWithoutRatings.length} teachers without ratings`);
-        
-        for (const teacher of teachersWithoutRatings) {
-          // Create teacher rating
-          const { error: insertError } = await supabase
-            .from('teacher_ratings')
-            .insert([{
-              teacher_id: teacher.id,
-              avg_rating: 5.0,
-              total_reviews: 0,
-              rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
-            }]);
-            
-          if (insertError) {
-            console.log(`Warning: Could not create teacher rating for ${teacher.id}: ${insertError.message}`);
-            this.issues.push({
-              type: 'missing_teacher_rating',
-              teacher_id: teacher.id,
-              error: insertError.message
-            });
-          } else {
-            this.fixes.push({
-              type: 'missing_teacher_rating',
-              teacher_id: teacher.id,
-              action: 'created'
-            });
-          }
-        }
-      } else {
-        console.log('✅ All teachers have ratings');
-      }
-      
-      return this.fixes.filter(f => f.type === 'missing_teacher_rating').length;
-    } catch (error) {
-      console.error(`❌ Error fixing missing teacher ratings: ${error.message}`);
-      this.issues.push({
-        type: 'missing_teacher_rating_fix',
-        error: error.message
-      });
-      return 0;
-    }
-  }
-
   async updateTeacherRatings() {
-    console.log('🔧 Updating teacher ratings...');
+    console.log('🔧 Updating teacher ratings using secure functions...');
     
     try {
       // Get all teachers
       const { data: teachers, error: teachersError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, full_name')
         .eq('role', 'teacher')
         .limit(50);
         
@@ -354,43 +242,18 @@ class DatabaseFixer {
       let updatedCount = 0;
       
       for (const teacher of teachers) {
-        // Get all reviews for this teacher
-        const { data: reviews, error: reviewsError } = await supabase
-          .from('teacher_reviews')
-          .select('rating')
-          .eq('teacher_id', teacher.id);
-          
-        if (reviewsError) {
-          console.log(`Warning: Could not get reviews for teacher ${teacher.id}: ${reviewsError.message}`);
-          continue;
-        }
-        
-        if (reviews && reviews.length > 0) {
-          // Calculate average rating
-          const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
-          const avgRating = totalRating / reviews.length;
-          
-          // Count ratings by value
-          const ratingCounts = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
-          reviews.forEach(review => {
-            ratingCounts[review.rating.toString()]++;
+        try {
+          // Use the secure function to update teacher rating
+          const { error: updateError } = await supabase.rpc('update_teacher_rating_secure', {
+            teacher_id_param: teacher.id
           });
           
-          // Update teacher_ratings
-          const { error: updateError } = await supabase
-            .from('teacher_ratings')
-            .upsert([{
-              teacher_id: teacher.id,
-              avg_rating: avgRating,
-              total_reviews: reviews.length,
-              rating_counts: ratingCounts
-            }]);
-            
           if (updateError) {
-            console.log(`Warning: Could not update rating for teacher ${teacher.id}: ${updateError.message}`);
+            console.log(`Warning: Could not update rating for teacher ${teacher.full_name}: ${updateError.message}`);
             this.issues.push({
               type: 'teacher_rating_update',
               teacher_id: teacher.id,
+              teacher_name: teacher.full_name,
               error: updateError.message
             });
           } else {
@@ -398,10 +261,18 @@ class DatabaseFixer {
             this.fixes.push({
               type: 'teacher_rating_update',
               teacher_id: teacher.id,
-              reviews_count: reviews.length,
-              avg_rating: avgRating
+              teacher_name: teacher.full_name,
+              action: 'updated'
             });
           }
+        } catch (error) {
+          console.log(`Warning: Error updating rating for teacher ${teacher.full_name}: ${error.message}`);
+          this.issues.push({
+            type: 'teacher_rating_update',
+            teacher_id: teacher.id,
+            teacher_name: teacher.full_name,
+            error: error.message
+          });
         }
       }
       
@@ -443,7 +314,7 @@ class DatabaseFixer {
       console.log(`Found ${profilesCount} profiles, ${classesCount} classes, and ${bookingsCount} bookings`);
       
       // If we have sufficient data, skip creating more
-      if (profilesCount >= 6 && classesCount >= 6 && bookingsCount >= 6) {
+      if (profilesCount >= 6 && classesCount >= 6) {
         console.log('✅ Sufficient test data already exists');
         return 0;
       }
@@ -473,7 +344,7 @@ class DatabaseFixer {
           // Check if user already exists
           const { data: existingUser, error: checkError } = await supabase
             .from('profiles')
-            .select('id')
+            .select('id, email, full_name')
             .eq('email', student.email)
             .maybeSingle();
             
@@ -489,7 +360,9 @@ class DatabaseFixer {
             password: student.password
           });
           
-          if (authError) throw authError;
+          if (authError && !authError.message.includes('already registered')) {
+            throw authError;
+          }
           
           if (authData.user) {
             // Create profile
@@ -509,7 +382,20 @@ class DatabaseFixer {
             console.log(`Created student: ${student.email}`);
           }
         } catch (error) {
-          console.log(`Warning: Could not create student ${student.email}: ${error.message}`);
+          if (error.message.includes('already registered')) {
+            console.log(`Student ${student.email} already registered`);
+            // Try to get existing profile
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('id, email, full_name')
+              .eq('email', student.email)
+              .maybeSingle();
+            if (existingProfile) {
+              createdUsers.students.push(existingProfile);
+            }
+          } else {
+            console.log(`Warning: Could not create student ${student.email}: ${error.message}`);
+          }
         }
       }
       
@@ -519,7 +405,7 @@ class DatabaseFixer {
           // Check if user already exists
           const { data: existingUser, error: checkError } = await supabase
             .from('profiles')
-            .select('id')
+            .select('id, email, full_name')
             .eq('email', teacher.email)
             .maybeSingle();
             
@@ -548,7 +434,9 @@ class DatabaseFixer {
             password: teacher.password
           });
           
-          if (authError) throw authError;
+          if (authError && !authError.message.includes('already registered')) {
+            throw authError;
+          }
           
           if (authData.user) {
             // Create profile
@@ -571,7 +459,20 @@ class DatabaseFixer {
             await this.createTeacherProfile(profileData[0].id, teacher.fullName);
           }
         } catch (error) {
-          console.log(`Warning: Could not create teacher ${teacher.email}: ${error.message}`);
+          if (error.message.includes('already registered')) {
+            console.log(`Teacher ${teacher.email} already registered`);
+            // Try to get existing profile
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('id, email, full_name')
+              .eq('email', teacher.email)
+              .maybeSingle();
+            if (existingProfile) {
+              createdUsers.teachers.push(existingProfile);
+            }
+          } else {
+            console.log(`Warning: Could not create teacher ${teacher.email}: ${error.message}`);
+          }
         }
       }
       
@@ -684,21 +585,19 @@ class DatabaseFixer {
       
       console.log(`Created teacher profile for ${teacherId}`);
       
-      // Initialize teacher rating
-      const { data: ratingData, error: ratingError } = await supabase
-        .from('teacher_ratings')
-        .insert([{
-          teacher_id: teacherId,
-          avg_rating: 5.0,
-          total_reviews: 0,
-          rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
-        }])
-        .select();
+      // Initialize teacher rating using secure function
+      try {
+        const { error: ratingError } = await supabase.rpc('update_teacher_rating_secure', {
+          teacher_id_param: teacherId
+        });
         
-      if (ratingError) {
+        if (ratingError) {
+          console.log(`Warning: Could not initialize teacher rating: ${ratingError.message}`);
+        } else {
+          console.log(`Created teacher rating for ${teacherId}`);
+        }
+      } catch (ratingError) {
         console.log(`Warning: Could not initialize teacher rating: ${ratingError.message}`);
-      } else {
-        console.log(`Created teacher rating for ${teacherId}`);
       }
       
       return data[0];
@@ -763,6 +662,8 @@ class DatabaseFixer {
           let details = '';
           if (fix.action) details += `Action: ${fix.action}`;
           if (fix.old_count !== undefined) details += ` Count: ${fix.old_count} → ${fix.new_count}`;
+          if (fix.class_title) details += ` Class: ${fix.class_title}`;
+          if (fix.teacher_name) details += ` Teacher: ${fix.teacher_name}`;
           console.log(`  ${index + 1}. ${details}`);
         });
         if (fixes.length > 5) {
@@ -805,11 +706,13 @@ class DatabaseFixer {
     console.log('🚀 Starting Database Issue Resolution...\n');
     
     try {
+      // Try to authenticate for secure operations
+      await this.authenticateAsTestUser();
+      
       await this.createTestData();
       await this.fixParticipantCounts();
       await this.fixOrphanedRecords();
       await this.fixMissingTeacherProfiles();
-      await this.fixMissingTeacherRatings();
       await this.updateTeacherRatings();
       
       return this.generateReport();
