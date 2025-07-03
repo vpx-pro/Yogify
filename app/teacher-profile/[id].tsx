@@ -10,7 +10,8 @@ import {
   Linking,
   ActivityIndicator,
   FlatList,
-  Dimensions
+  Dimensions,
+  Alert
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -29,7 +30,8 @@ import {
   Award,
   Mail,
   Phone,
-  ExternalLink
+  ExternalLink,
+  User
 } from 'lucide-react-native';
 import TeacherAvatar from '@/components/TeacherAvatar';
 import type { Database } from '@/lib/supabase';
@@ -225,21 +227,34 @@ export default function TeacherProfileScreen() {
           
         if (error) throw error;
       } else {
-        // Add to favorites
-        const { error } = await supabase
+        // Check if entry already exists to avoid duplicate key error
+        const { data: existingData, error: checkError } = await supabase
           .from('saved_teachers')
-          .insert({
-            student_id: profile.id,
-            teacher_id: teacherId
-          });
+          .select('id')
+          .eq('student_id', profile.id)
+          .eq('teacher_id', teacherId)
+          .maybeSingle();
           
-        if (error) throw error;
+        if (checkError && checkError.code !== 'PGRST116') throw checkError;
+        
+        // Only insert if no existing entry
+        if (!existingData) {
+          const { error } = await supabase
+            .from('saved_teachers')
+            .insert({
+              student_id: profile.id,
+              teacher_id: teacherId
+            });
+            
+          if (error) throw error;
+        }
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
       
       // Revert optimistic update on error
       setIsFavorite(!isFavorite);
+      Alert.alert('Error', 'Failed to update favorite status. Please try again.');
     } finally {
       setLoadingFavorite(false);
     }
@@ -376,7 +391,7 @@ export default function TeacherProfileScreen() {
 
   const renderReviewCard = (review: Review) => {
     return (
-      <View style={styles.reviewCard}>
+      <View key={review.id} style={styles.reviewCard}>
         <View style={styles.reviewHeader}>
           <View style={styles.reviewerInfo}>
             <View style={styles.reviewerAvatar}>
@@ -629,7 +644,7 @@ export default function TeacherProfileScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.classesContainer}
-                scrollEnabled={false}
+                scrollEnabled={upcomingClasses.length > 3}
                 numColumns={Math.min(3, upcomingClasses.length)}
                 key={Math.min(3, upcomingClasses.length)}
               />

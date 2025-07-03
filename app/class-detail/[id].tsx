@@ -195,15 +195,27 @@ export default function ClassDetailScreen() {
           
         if (error) throw error;
       } else {
-        // Add to favorites
-        const { error } = await supabase
+        // Check if entry already exists to avoid duplicate key error
+        const { data: existingData, error: checkError } = await supabase
           .from('saved_teachers')
-          .insert({
-            student_id: profile.id,
-            teacher_id: yogaClass.teacher_id
-          });
+          .select('id')
+          .eq('student_id', profile.id)
+          .eq('teacher_id', yogaClass.teacher_id)
+          .maybeSingle();
           
-        if (error) throw error;
+        if (checkError && checkError.code !== 'PGRST116') throw checkError;
+        
+        // Only insert if no existing entry
+        if (!existingData) {
+          const { error } = await supabase
+            .from('saved_teachers')
+            .insert({
+              student_id: profile.id,
+              teacher_id: yogaClass.teacher_id
+            });
+            
+          if (error) throw error;
+        }
       }
     } catch (error) {
       console.error('Error toggling favorite teacher:', error);
@@ -568,7 +580,7 @@ export default function ClassDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#C4896F" />
+          <ActivityIndicator size="large" color="#8B7355" />
           <Text style={styles.loadingText}>Loading details...</Text>
         </View>
       </SafeAreaView>
