@@ -9,7 +9,6 @@ import {
   Image,
   Linking,
   ActivityIndicator,
-  FlatList,
   Dimensions,
   Alert
 } from 'react-native';
@@ -895,7 +894,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   classesContainer: {
-    gap: 16,
+    paddingRight: 20,
   },
   classCard: {
     backgroundColor: 'white',
