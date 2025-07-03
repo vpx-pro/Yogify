@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -67,7 +67,7 @@ export default function ProfileScreen() {
         return;
       }
       
-      // Get ratings separately
+      // Get ratings separately - don't join with teacher_ratings as it might not exist for all teachers
       const { data: ratingsData, error: ratingsError } = await supabase
         .from('teacher_ratings')
         .select(`
