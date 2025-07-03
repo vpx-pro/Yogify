@@ -1,0 +1,703 @@
+{
+  "timestamp": "2025-07-03T13:11:13.588Z",
+  "summary": {
+    "totalTests": 60,
+    "passedTests": 36,
+    "failedTests": 24,
+    "successRate": 60
+  },
+  "errors": [
+    {
+      "category": "Auth",
+      "test": "Student: s1@yogify.com",
+      "error": "Error: User already registered"
+    },
+    {
+      "category": "Auth",
+      "test": "Student Login",
+      "error": "Error: Invalid login credentials"
+    },
+    {
+      "category": "Auth",
+      "test": "Teacher Login",
+      "error": "Error: Invalid login credentials"
+    },
+    {
+      "category": "Bookings",
+      "test": "Booking: Student Two - Upcoming undefined's Flow",
+      "error": "Error: new row violates row-level security policy for table \"bookings\""
+    },
+    {
+      "category": "Bookings",
+      "test": "Booking: Student Two - undefined's Wellness Retreat",
+      "error": "Error: new row violates row-level security policy for table \"bookings\""
+    },
+    {
+      "category": "Bookings",
+      "test": "Booking: Student Two - Upcoming undefined's Flow",
+      "error": "Error: new row violates row-level security policy for table \"bookings\""
+    },
+    {
+      "category": "Bookings",
+      "test": "Booking: Student Two - undefined's Wellness Retreat",
+      "error": "Error: new row violates row-level security policy for table \"bookings\""
+    },
+    {
+      "category": "Bookings",
+      "test": "Booking: Student Two - Upcoming undefined's Flow",
+      "error": "Error: new row violates row-level security policy for table \"bookings\""
+    },
+    {
+      "category": "Bookings",
+      "test": "Booking: Student Two - undefined's Wellness Retreat",
+      "error": "Error: new row violates row-level security policy for table \"bookings\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Review: Student Two -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_reviews\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Review: Student Three -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_ratings\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Rating Update: undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_ratings\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Review: Student Two -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_reviews\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Review: Student Three -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_ratings\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Rating Update: undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_ratings\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Review: Student Two -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_reviews\""
+    },
+    {
+      "category": "Reviews",
+      "test": "Review: Student Three -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"teacher_ratings\""
+    },
+    {
+      "category": "Saved",
+      "test": "Save: Student Two -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"saved_teachers\""
+    },
+    {
+      "category": "Saved",
+      "test": "Save: Student Two -> undefined",
+      "error": "Error: new row violates row-level security policy for table \"saved_teachers\""
+    },
+    {
+      "category": "RLS",
+      "test": "Student Auth",
+      "error": "Error signing in as student: Invalid login credentials"
+    },
+    {
+      "category": "RLS",
+      "test": "Teacher Auth",
+      "error": "Error signing in as teacher: Invalid login credentials"
+    },
+    {
+      "category": "Integrity",
+      "test": "Participant Count",
+      "error": "Found and fixed 11 inconsistencies"
+    },
+    {
+      "category": "Integrity",
+      "test": "Foreign Keys",
+      "error": "Found 3 orphaned bookings"
+    },
+    {
+      "category": "Integrity",
+      "test": "Foreign Keys",
+      "error": "Found 2 orphaned reviews"
+    }
+  ],
+  "results": [
+    {
+      "timestamp": "2025-07-03T13:10:05.473Z",
+      "category": "Structure",
+      "test": "Database Connection",
+      "success": true,
+      "details": "Successfully connected to database",
+      "duration": 1385
+    },
+    {
+      "timestamp": "2025-07-03T13:10:06.248Z",
+      "category": "Structure",
+      "test": "Table: profiles",
+      "success": true,
+      "details": "Table exists",
+      "duration": 775
+    },
+    {
+      "timestamp": "2025-07-03T13:10:07.100Z",
+      "category": "Structure",
+      "test": "Table: teacher_profiles",
+      "success": true,
+      "details": "Table exists",
+      "duration": 850
+    },
+    {
+      "timestamp": "2025-07-03T13:10:07.887Z",
+      "category": "Structure",
+      "test": "Table: yoga_classes",
+      "success": true,
+      "details": "Table exists",
+      "duration": 787
+    },
+    {
+      "timestamp": "2025-07-03T13:10:08.423Z",
+      "category": "Structure",
+      "test": "Table: bookings",
+      "success": true,
+      "details": "Table exists",
+      "duration": 533
+    },
+    {
+      "timestamp": "2025-07-03T13:10:08.943Z",
+      "category": "Structure",
+      "test": "Table: saved_teachers",
+      "success": true,
+      "details": "Table exists",
+      "duration": 520
+    },
+    {
+      "timestamp": "2025-07-03T13:10:09.455Z",
+      "category": "Structure",
+      "test": "Table: teacher_reviews",
+      "success": true,
+      "details": "Table exists",
+      "duration": 512
+    },
+    {
+      "timestamp": "2025-07-03T13:10:10.230Z",
+      "category": "Structure",
+      "test": "Table: teacher_ratings",
+      "success": true,
+      "details": "Table exists",
+      "duration": 775
+    },
+    {
+      "timestamp": "2025-07-03T13:10:10.697Z",
+      "category": "Structure",
+      "test": "Table: participant_count_audit",
+      "success": true,
+      "details": "Table exists",
+      "duration": 467
+    },
+    {
+      "timestamp": "2025-07-03T13:10:11.166Z",
+      "category": "Structure",
+      "test": "Enum Types",
+      "success": true,
+      "details": "Enum types check skipped (function not available)",
+      "duration": 466
+    },
+    {
+      "timestamp": "2025-07-03T13:10:12.562Z",
+      "category": "Auth",
+      "test": "Student: s1@yogify.com",
+      "success": false,
+      "details": "Error: User already registered",
+      "duration": 1390
+    },
+    {
+      "timestamp": "2025-07-03T13:10:14.020Z",
+      "category": "Auth",
+      "test": "Student: s2@yogify.com",
+      "success": true,
+      "details": "Created student user",
+      "duration": 1458
+    },
+    {
+      "timestamp": "2025-07-03T13:10:15.899Z",
+      "category": "Auth",
+      "test": "Student: s3@yogify.com",
+      "success": true,
+      "details": "Created student user",
+      "duration": 1878
+    },
+    {
+      "timestamp": "2025-07-03T13:10:16.409Z",
+      "category": "Auth",
+      "test": "Teacher: t1@yogify.com",
+      "success": true,
+      "details": "User already exists",
+      "duration": 510
+    },
+    {
+      "timestamp": "2025-07-03T13:10:17.536Z",
+      "category": "Auth",
+      "test": "Teacher: t2@yogify.com",
+      "success": true,
+      "details": "User already exists",
+      "duration": 511
+    },
+    {
+      "timestamp": "2025-07-03T13:10:18.560Z",
+      "category": "Auth",
+      "test": "Teacher: t3@yogify.com",
+      "success": true,
+      "details": "User already exists",
+      "duration": 549
+    },
+    {
+      "timestamp": "2025-07-03T13:10:19.604Z",
+      "category": "Auth",
+      "test": "Student Login",
+      "success": false,
+      "details": "Error: Invalid login credentials",
+      "duration": 529
+    },
+    {
+      "timestamp": "2025-07-03T13:10:20.512Z",
+      "category": "Auth",
+      "test": "Teacher Login",
+      "success": false,
+      "details": "Error: Invalid login credentials",
+      "duration": 908
+    },
+    {
+      "timestamp": "2025-07-03T13:10:21.023Z",
+      "category": "Classes",
+      "test": "Past Class: undefined",
+      "success": true,
+      "details": "Created past class",
+      "duration": 509
+    },
+    {
+      "timestamp": "2025-07-03T13:10:21.636Z",
+      "category": "Classes",
+      "test": "Upcoming Class: undefined",
+      "success": true,
+      "details": "Created upcoming class",
+      "duration": 613
+    },
+    {
+      "timestamp": "2025-07-03T13:10:22.157Z",
+      "category": "Classes",
+      "test": "Retreat: undefined",
+      "success": true,
+      "details": "Created retreat",
+      "duration": 521
+    },
+    {
+      "timestamp": "2025-07-03T13:10:22.657Z",
+      "category": "Classes",
+      "test": "Past Class: undefined",
+      "success": true,
+      "details": "Created past class",
+      "duration": 499
+    },
+    {
+      "timestamp": "2025-07-03T13:10:23.122Z",
+      "category": "Classes",
+      "test": "Upcoming Class: undefined",
+      "success": true,
+      "details": "Created upcoming class",
+      "duration": 461
+    },
+    {
+      "timestamp": "2025-07-03T13:10:23.581Z",
+      "category": "Classes",
+      "test": "Retreat: undefined",
+      "success": true,
+      "details": "Created retreat",
+      "duration": 456
+    },
+    {
+      "timestamp": "2025-07-03T13:10:24.029Z",
+      "category": "Classes",
+      "test": "Past Class: undefined",
+      "success": true,
+      "details": "Created past class",
+      "duration": 448
+    },
+    {
+      "timestamp": "2025-07-03T13:10:24.483Z",
+      "category": "Classes",
+      "test": "Upcoming Class: undefined",
+      "success": true,
+      "details": "Created upcoming class",
+      "duration": 454
+    },
+    {
+      "timestamp": "2025-07-03T13:10:25.009Z",
+      "category": "Classes",
+      "test": "Retreat: undefined",
+      "success": true,
+      "details": "Created retreat",
+      "duration": 526
+    },
+    {
+      "timestamp": "2025-07-03T13:10:25.638Z",
+      "category": "Classes",
+      "test": "Retrieve Classes",
+      "success": true,
+      "details": "Retrieved 10 classes with teacher info",
+      "duration": 627
+    },
+    {
+      "timestamp": "2025-07-03T13:10:26.649Z",
+      "category": "Bookings",
+      "test": "Booking: Student Two - Upcoming undefined's Flow",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"bookings\"",
+      "duration": 1005
+    },
+    {
+      "timestamp": "2025-07-03T13:10:27.555Z",
+      "category": "Bookings",
+      "test": "Booking: Student Two - undefined's Wellness Retreat",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"bookings\"",
+      "duration": 903
+    },
+    {
+      "timestamp": "2025-07-03T13:10:28.558Z",
+      "category": "Bookings",
+      "test": "Booking: Student Three - undefined's Wellness Retreat",
+      "success": true,
+      "details": "Created booking",
+      "duration": 1001
+    },
+    {
+      "timestamp": "2025-07-03T13:10:30.139Z",
+      "category": "Bookings",
+      "test": "Booking: Student Two - Upcoming undefined's Flow",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"bookings\"",
+      "duration": 1075
+    },
+    {
+      "timestamp": "2025-07-03T13:10:31.264Z",
+      "category": "Bookings",
+      "test": "Booking: Student Three - Upcoming undefined's Flow",
+      "success": true,
+      "details": "Created booking",
+      "duration": 1123
+    },
+    {
+      "timestamp": "2025-07-03T13:10:32.949Z",
+      "category": "Bookings",
+      "test": "Booking: Student Two - undefined's Wellness Retreat",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"bookings\"",
+      "duration": 1094
+    },
+    {
+      "timestamp": "2025-07-03T13:10:34.154Z",
+      "category": "Bookings",
+      "test": "Booking: Student Three - undefined's Wellness Retreat",
+      "success": true,
+      "details": "Created booking",
+      "duration": 1203
+    },
+    {
+      "timestamp": "2025-07-03T13:10:35.661Z",
+      "category": "Bookings",
+      "test": "Booking: Student Two - Upcoming undefined's Flow",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"bookings\"",
+      "duration": 1018
+    },
+    {
+      "timestamp": "2025-07-03T13:10:36.897Z",
+      "category": "Bookings",
+      "test": "Booking: Student Two - undefined's Wellness Retreat",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"bookings\"",
+      "duration": 1235
+    },
+    {
+      "timestamp": "2025-07-03T13:10:37.526Z",
+      "category": "Bookings",
+      "test": "Retrieve Bookings",
+      "success": true,
+      "details": "Retrieved 3 bookings with related data",
+      "duration": 626
+    },
+    {
+      "timestamp": "2025-07-03T13:10:38.618Z",
+      "category": "Reviews",
+      "test": "Review: Student Two -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_reviews\"",
+      "duration": 1086
+    },
+    {
+      "timestamp": "2025-07-03T13:10:39.769Z",
+      "category": "Reviews",
+      "test": "Review: Student Three -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_ratings\"",
+      "duration": 1150
+    },
+    {
+      "timestamp": "2025-07-03T13:10:40.889Z",
+      "category": "Reviews",
+      "test": "Rating Update: undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_ratings\"",
+      "duration": 1118
+    },
+    {
+      "timestamp": "2025-07-03T13:10:42.220Z",
+      "category": "Reviews",
+      "test": "Review: Student Two -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_reviews\"",
+      "duration": 1327
+    },
+    {
+      "timestamp": "2025-07-03T13:10:43.240Z",
+      "category": "Reviews",
+      "test": "Review: Student Three -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_ratings\"",
+      "duration": 1014
+    },
+    {
+      "timestamp": "2025-07-03T13:10:44.266Z",
+      "category": "Reviews",
+      "test": "Rating Update: undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_ratings\"",
+      "duration": 1026
+    },
+    {
+      "timestamp": "2025-07-03T13:10:45.389Z",
+      "category": "Reviews",
+      "test": "Review: Student Two -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_reviews\"",
+      "duration": 1121
+    },
+    {
+      "timestamp": "2025-07-03T13:10:46.452Z",
+      "category": "Reviews",
+      "test": "Review: Student Three -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"teacher_ratings\"",
+      "duration": 1063
+    },
+    {
+      "timestamp": "2025-07-03T13:10:47.438Z",
+      "category": "Reviews",
+      "test": "Retrieve Reviews",
+      "success": true,
+      "details": "Retrieved 2 reviews with related data",
+      "duration": 512
+    },
+    {
+      "timestamp": "2025-07-03T13:10:48.461Z",
+      "category": "Saved",
+      "test": "Save: Student Two -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"saved_teachers\"",
+      "duration": 1022
+    },
+    {
+      "timestamp": "2025-07-03T13:10:50.202Z",
+      "category": "Saved",
+      "test": "Save: Student Two -> undefined",
+      "success": false,
+      "details": "Error: new row violates row-level security policy for table \"saved_teachers\"",
+      "duration": 1741
+    },
+    {
+      "timestamp": "2025-07-03T13:10:51.176Z",
+      "category": "Saved",
+      "test": "Save: Student Three -> undefined",
+      "success": true,
+      "details": "Saved teacher",
+      "duration": 974
+    },
+    {
+      "timestamp": "2025-07-03T13:10:52.069Z",
+      "category": "Saved",
+      "test": "Save: Student Three -> undefined",
+      "success": true,
+      "details": "Saved teacher",
+      "duration": 891
+    },
+    {
+      "timestamp": "2025-07-03T13:10:52.539Z",
+      "category": "Saved",
+      "test": "Retrieve Saved",
+      "success": true,
+      "details": "Retrieved 2 saved teachers with profiles",
+      "duration": 467
+    },
+    {
+      "timestamp": "2025-07-03T13:10:53.049Z",
+      "category": "RLS",
+      "test": "Anonymous Access",
+      "success": true,
+      "details": "Anonymous access properly restricted",
+      "duration": 509
+    },
+    {
+      "timestamp": "2025-07-03T13:10:53.657Z",
+      "category": "RLS",
+      "test": "Student Auth",
+      "success": false,
+      "details": "Error signing in as student: Invalid login credentials",
+      "duration": 1117
+    },
+    {
+      "timestamp": "2025-07-03T13:10:54.299Z",
+      "category": "RLS",
+      "test": "Teacher Auth",
+      "success": false,
+      "details": "Error signing in as teacher: Invalid login credentials",
+      "duration": 1759
+    },
+    {
+      "timestamp": "2025-07-03T13:11:11.438Z",
+      "category": "Integrity",
+      "test": "Participant Count",
+      "success": false,
+      "details": "Found and fixed 11 inconsistencies",
+      "duration": 17138
+    },
+    {
+      "timestamp": "2025-07-03T13:11:11.907Z",
+      "category": "Integrity",
+      "test": "Foreign Keys",
+      "success": false,
+      "details": "Found 3 orphaned bookings",
+      "duration": 467
+    },
+    {
+      "timestamp": "2025-07-03T13:11:12.564Z",
+      "category": "Integrity",
+      "test": "Foreign Keys",
+      "success": false,
+      "details": "Found 2 orphaned reviews",
+      "duration": 1124
+    },
+    {
+      "timestamp": "2025-07-03T13:11:13.031Z",
+      "category": "Performance",
+      "test": "Complex Query",
+      "success": true,
+      "details": "Complex join query completed in 465ms (Good)",
+      "duration": 465
+    },
+    {
+      "timestamp": "2025-07-03T13:11:13.586Z",
+      "category": "Performance",
+      "test": "Search Query",
+      "success": true,
+      "details": "Search query completed in 553ms (Good)",
+      "duration": 553
+    }
+  ],
+  "recommendations": [
+    "🔐 Address authentication and user creation issues",
+    "🔒 Review and fix Row Level Security policies",
+    "🔄 Run data integrity fixes to ensure consistency"
+  ],
+  "testData": {
+    "users": {
+      "students": [
+        {
+          "id": "0d297904-ae27-485a-887f-0c61c6d0f83e",
+          "email": "s2@yogify.com",
+          "full_name": "Student Two",
+          "role": "student",
+          "avatar_url": null,
+          "created_at": "2025-07-03T13:10:11.104275+00:00",
+          "updated_at": "2025-07-03T13:10:11.104275+00:00"
+        },
+        {
+          "id": "fb7b44bf-08b7-4401-9165-f009d74f6204",
+          "email": "s3@yogify.com",
+          "full_name": "Student Three",
+          "role": "student",
+          "avatar_url": null,
+          "created_at": "2025-07-03T13:10:12.944349+00:00",
+          "updated_at": "2025-07-03T13:10:12.944349+00:00"
+        }
+      ],
+      "teachers": [
+        {
+          "id": "290333ee-b229-46a6-ae53-9c22ab84895e"
+        },
+        {
+          "id": "a2bd0d89-c8a2-4400-a0f2-2a27ef7a9202"
+        },
+        {
+          "id": "bd592672-90ee-48df-8512-b528cdd747e9"
+        }
+      ]
+    },
+    "classes": [
+      {
+        "id": "180a208a-bf97-42d4-8546-8dfe9c97a8b5",
+        "title": "Past undefined's Flow"
+      },
+      {
+        "id": "bdd93367-a270-418f-bfc5-d788b999624d",
+        "title": "Upcoming undefined's Flow"
+      },
+      {
+        "id": "2735e6c1-2b10-421a-ac4b-8341ac3c4c36",
+        "title": "undefined's Wellness Retreat"
+      },
+      {
+        "id": "cc01a5c3-bd40-4b31-ad80-a9568c84c8b6",
+        "title": "Past undefined's Flow"
+      },
+      {
+        "id": "c74a49a9-3deb-44d6-9abf-9d2a953b155d",
+        "title": "Upcoming undefined's Flow"
+      },
+      {
+        "id": "8a43519c-ff0a-4e97-a5e1-70dcf024b2c5",
+        "title": "undefined's Wellness Retreat"
+      },
+      {
+        "id": "1cc2b721-a8c3-405a-bf23-6a4c7643f31e",
+        "title": "Past undefined's Flow"
+      },
+      {
+        "id": "e0bc7cc7-6eba-4158-bd62-857b955eedd6",
+        "title": "Upcoming undefined's Flow"
+      },
+      {
+        "id": "02d9d8f9-b7d2-475b-8fd3-c5294d4608e6",
+        "title": "undefined's Wellness Retreat"
+      }
+    ],
+    "bookings": [
+      {
+        "id": "2de61152-0be7-4f5e-a5a1-ae1fd41bde75"
+      },
+      {
+        "id": "aa039ef6-10ad-412a-a30b-d5684a1865e1"
+      },
+      {
+        "id": "058ae492-692a-49bf-93cf-66ff59dbbc7a"
+      }
+    ],
+    "reviews": []
+  }
+}
