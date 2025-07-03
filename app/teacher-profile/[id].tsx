@@ -236,26 +236,39 @@ export default function TeacherProfileScreen() {
           
         if (error) throw error;
       } else {
-        // Check if entry already exists to avoid duplicate key error
-        const { data: existingData, error: checkError } = await supabase
-          .from('saved_teachers')
-          .select('id')
-          .eq('student_id', profile.id)
-          .eq('teacher_id', teacherId)
-          .maybeSingle();
+        try {
+          // Try using the secure function first
+          const { error } = await supabase.rpc('save_teacher_for_student', {
+            student_id_param: profile.id,
+            teacher_id_param: teacherId
+          });
           
-        if (checkError && checkError.code !== 'PGRST116') throw checkError;
-        
-        // Only insert if no existing entry
-        if (!existingData) {
-          const { error } = await supabase
-            .from('saved_teachers')
-            .insert({
-              student_id: profile.id,
-              teacher_id: teacherId
-            });
-            
           if (error) throw error;
+        } catch (funcError) {
+          console.error('Error using secure function:', funcError);
+          
+          // Fallback to direct insert
+          // Check if entry already exists to avoid duplicate key error
+          const { data: existingData, error: checkError } = await supabase
+            .from('saved_teachers')
+            .select('id')
+            .eq('student_id', profile.id)
+            .eq('teacher_id', teacherId)
+            .maybeSingle();
+            
+          if (checkError && checkError.code !== 'PGRST116') throw checkError;
+          
+          // Only insert if no existing entry
+          if (!existingData) {
+            const { error } = await supabase
+              .from('saved_teachers')
+              .insert({
+                student_id: profile.id,
+                teacher_id: teacherId
+              });
+              
+            if (error) throw error;
+          }
         }
       }
     } catch (error) {
