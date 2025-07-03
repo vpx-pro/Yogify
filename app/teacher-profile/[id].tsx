@@ -181,7 +181,7 @@ export default function TeacherProfileScreen() {
           teacher_id: review.teacher_id,
           class_id: review.class_id,
           rating: review.rating,
-          comment: review.comment,
+          comment: review.comment || '',
           created_at: review.created_at,
           student_name: review.profiles?.full_name || 'Anonymous Student',
           student_avatar: review.profiles?.avatar_url,
@@ -647,17 +647,13 @@ export default function TeacherProfileScreen() {
         {activeTab === 'classes' && (
           <View style={styles.tabContent}>
             {upcomingClasses.length > 0 ? (
-              <FlatList
-                data={upcomingClasses}
-                renderItem={({ item }) => renderClassCard(item)}
-                keyExtractor={item => item.id}
+              <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.classesContainer}
-                scrollEnabled={upcomingClasses.length > 3}
-                numColumns={Math.min(3, upcomingClasses.length)}
-                key={Math.min(3, upcomingClasses.length)}
-              />
+              >
+                {upcomingClasses.map((item) => renderClassCard(item))}
+              </ScrollView>
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>No upcoming classes</Text>
