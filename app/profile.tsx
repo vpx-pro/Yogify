@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -40,10 +40,14 @@ export default function ProfileScreen() {
         `)
         .eq('student_id', profile.id);
 
-      if (savedError) throw savedError;
+      if (savedError) {
+        console.error('Error fetching saved teachers:', savedError);
+        return;
+      }
       
       if (!savedData || savedData.length === 0) {
         setSavedTeachers([]);
+        setLoading(false);
         return;
       }
       
@@ -58,7 +62,10 @@ export default function ProfileScreen() {
         `)
         .in('id', teacherIds);
         
-      if (teacherError) throw teacherError;
+      if (teacherError) {
+        console.error('Error fetching teacher profiles:', teacherError);
+        return;
+      }
       
       // Get ratings separately
       const { data: ratingsData, error: ratingsError } = await supabase
@@ -69,7 +76,9 @@ export default function ProfileScreen() {
         `)
         .in('teacher_id', teacherIds);
         
-      if (ratingsError && ratingsError.code !== 'PGRST116') throw ratingsError;
+      if (ratingsError && ratingsError.code !== 'PGRST116') {
+        console.error('Error fetching teacher ratings:', ratingsError);
+      }
       
       // Combine the data
       const formattedTeachers = savedData.map(saved => {
@@ -173,7 +182,12 @@ export default function ProfileScreen() {
               )}
             </View>
             
-            {savedTeachers.length > 0 ? (
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#8B7355" />
+                <Text style={styles.loadingText}>Loading favorite teachers...</Text>
+              </View>
+            ) : savedTeachers.length > 0 ? (
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false}
@@ -425,6 +439,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8B7355',
     fontWeight: '500',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
   },
   savedTeachersContainer: {
     paddingBottom: 8,

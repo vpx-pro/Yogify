@@ -94,24 +94,34 @@ export default function TeacherProfileScreen() {
 
   const fetchTeacherProfile = async () => {
     try {
-      const { data, error } = await supabase
+      // First get the basic profile
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('*, teacher_profiles(*)')
+        .select('*')
         .eq('id', teacherId)
         .eq('role', 'teacher')
         .single();
 
-      if (error) throw error;
+      if (profileError) throw profileError;
       
-      // Combine profile with teacher_profile data
+      // Then get the teacher profile details
+      const { data: teacherProfileData, error: teacherProfileError } = await supabase
+        .from('teacher_profiles')
+        .select('*')
+        .eq('id', teacherId)
+        .maybeSingle();
+      
+      if (teacherProfileError && teacherProfileError.code !== 'PGRST116') throw teacherProfileError;
+      
+      // Combine the data
       const teacherData = {
-        ...data,
-        bio: data.teacher_profiles?.[0]?.bio || '',
-        experience_years: data.teacher_profiles?.[0]?.experience_years || 0,
-        specialties: data.teacher_profiles?.[0]?.specialties || [],
-        certifications: data.teacher_profiles?.[0]?.certifications || [],
-        social_links: data.teacher_profiles?.[0]?.social_links || {},
-        phone: data.teacher_profiles?.[0]?.phone || ''
+        ...profileData,
+        bio: teacherProfileData?.bio || '',
+        experience_years: teacherProfileData?.experience_years || 0,
+        specialties: teacherProfileData?.specialties || [],
+        certifications: teacherProfileData?.certifications || [],
+        social_links: teacherProfileData?.social_links || {},
+        phone: teacherProfileData?.phone || ''
       };
       
       setTeacher(teacherData);
@@ -198,7 +208,7 @@ export default function TeacherProfileScreen() {
         .eq('teacher_id', teacherId)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       setIsFavorite(!!data);
     } catch (error) {
       console.error('Error checking favorite status:', error);

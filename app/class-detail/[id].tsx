@@ -166,7 +166,11 @@ export default function ClassDetailScreen() {
         .eq('teacher_id', yogaClass.teacher_id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking favorite teacher status:', error);
+        return;
+      }
+      
       setIsFavoriteTeacher(!!data);
     } catch (error: any) {
       console.error('Error checking favorite teacher status:', error);
@@ -590,6 +594,14 @@ export default function ClassDetailScreen() {
   if (!id || !yogaClass) {
     return (
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.headerBackButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
             {!id ? 'Invalid class ID.' : 'Class not found.'}
@@ -778,7 +790,7 @@ export default function ClassDetailScreen() {
                   styles.detailValue,
                   classFull && styles.fullText
                 ]}>
-                  {actualParticipantCount} / {isRetreat ? yogaClass.retreat_capacity : yogaClass.max_participants}
+                  {actualParticipantCount} / {isRetreat ? (yogaClass!.retreat_capacity ?? yogaClass!.max_participants) : yogaClass!.max_participants}
                   {classFull && ' (Full)'}
                 </Text>
                 <View style={styles.participantIndicator}>
