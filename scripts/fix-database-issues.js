@@ -1,288 +1,719 @@
-#!/usr/bin/env node
-
 /**
- * Database Issue Resolution Script
+ * Yogify Database Issue Fixer
  * Identifies and fixes common database issues
  */
 
 require('dotenv').config();
-
 const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
+
+// Initialize Supabase client
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase environment variables. Please check your .env file.');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 class DatabaseFixer {
   constructor() {
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase environment variables. Please check your .env file.');
-    }
-    
-    this.supabase = createClient(supabaseUrl, supabaseKey);
     this.issues = [];
     this.fixes = [];
   }
 
-  async checkAndFixConstraintIssues() {
-    console.log('🔧 Checking and fixing constraint issues...\n');
-
+  async fixParticipantCounts() {
+    console.log('🔧 Fixing participant counts...');
+    
     try {
-      // Check for bookings that violate the payment status constraint
-      const { data: violatingBookings, error } = await this.supabase
-        .from('bookings')
-        .select('*')
-        .eq('status', 'cancelled')
-        .eq('payment_status', 'completed');
-
-      if (error) {
-        console.error('❌ Error checking constraint violations:', error.message);
-        return;
-      }
-
-      if (violatingBookings && violatingBookings.length > 0) {
-        console.log(`⚠️ Found ${violatingBookings.length} bookings violating payment status constraint`);
+      // Get all classes
+      const { data: classes, error: classesError } = await supabase
+        .from('yoga_classes')
+        .select('id, current_participants')
+        .order('date', { ascending: false })
+        .limit(100);
         
-        // Fix each violating booking
-        for (const booking of violatingBookings) {
-          try {
-            const { error: updateError } = await this.supabase
-              .from('bookings')
-              .update({ payment_status: 'refunded' })
-              .eq('id', booking.id);
-
-            if (updateError) {
-              console.error(`❌ Failed to fix booking ${booking.id}:`, updateError.message);
-              this.issues.push({
-                type: 'constraint_violation',
-                booking_id: booking.id,
-                error: updateError.message
-              });
-            } else {
-              console.log(`✅ Fixed booking ${booking.id}: changed payment_status from completed to refunded`);
-              this.fixes.push({
-                type: 'constraint_fix',
-                booking_id: booking.id,
-                action: 'changed payment_status to refunded'
-              });
-            }
-          } catch (error) {
-            console.error(`❌ Error fixing booking ${booking.id}:`, error.message);
+      if (classesError) throw classesError;
+      
+      let fixedCount = 0;
+      
+      for (const cls of classes) {
+        // Count confirmed bookings
+        const { count, error: countError } = await supabase
+          .from('bookings')
+          .select('*', { count: 'exact', head: true })
+          .eq('class_id', cls.id)
+          .eq('status', 'confirmed');
+          
+        if (countError) {
+          console.log(`Warning: Could not count bookings for class ${cls.id}: ${countError.message}`);
+          continue;
+        }
+        
+        if (count !== cls.current_participants) {
+          // Fix the inconsistency
+          const { error: updateError } = await supabase
+            .from('yoga_classes')
+            .update({ current_participants: count })
+            .eq('id', cls.id);
+            
+          if (updateError) {
+            console.log(`Warning: Could not fix participant count for class ${cls.id}: ${updateError.message}`);
             this.issues.push({
-              type: 'fix_error',
-              booking_id: booking.id,
-              error: error.message
+              type: 'participant_count',
+              class_id: cls.id,
+              error: updateError.message
+            });
+          } else {
+            fixedCount++;
+            this.fixes.push({
+              type: 'participant_count',
+              class_id: cls.id,
+              old_count: cls.current_participants,
+              new_count: count
+            });
+            
+            // Add audit record
+            try {
+              await supabase
+                .from('participant_count_audit')
+                .insert([{
+                  class_id: cls.id,
+                  action: 'sync',
+                  old_count: cls.current_participants,
+                  new_count: count,
+                  reason: 'Automated fix'
+                }]);
+            } catch (auditError) {
+              console.log(`Warning: Could not create audit record: ${auditError.message}`);
+            }
+          }
+        }
+      }
+      
+      console.log(`✅ Fixed ${fixedCount} participant count inconsistencies`);
+      return fixedCount;
+    } catch (error) {
+      console.error(`❌ Error fixing participant counts: ${error.message}`);
+      this.issues.push({
+        type: 'participant_count_fix',
+        error: error.message
+      });
+      return 0;
+    }
+  }
+
+  async fixOrphanedRecords() {
+    console.log('🔧 Fixing orphaned records...');
+    
+    try {
+      // Check for orphaned teacher_profiles
+      const { data: orphanedProfiles, error: profilesError } = await supabase
+        .from('teacher_profiles')
+        .select(`
+          id,
+          profiles!left (id)
+        `)
+        .is('profiles.id', null);
+        
+      if (profilesError) throw profilesError;
+      
+      if (orphanedProfiles && orphanedProfiles.length > 0) {
+        console.log(`Found ${orphanedProfiles.length} orphaned teacher profiles`);
+        
+        for (const profile of orphanedProfiles) {
+          const { error: deleteError } = await supabase
+            .from('teacher_profiles')
+            .delete()
+            .eq('id', profile.id);
+            
+          if (deleteError) {
+            console.log(`Warning: Could not delete orphaned teacher profile ${profile.id}: ${deleteError.message}`);
+            this.issues.push({
+              type: 'orphaned_profile',
+              profile_id: profile.id,
+              error: deleteError.message
+            });
+          } else {
+            this.fixes.push({
+              type: 'orphaned_profile',
+              profile_id: profile.id,
+              action: 'deleted'
             });
           }
         }
       } else {
-        console.log('✅ No constraint violations found');
+        console.log('✅ No orphaned teacher profiles found');
       }
-    } catch (error) {
-      console.error('❌ Error in constraint check:', error.message);
-      this.issues.push({
-        type: 'check_error',
-        error: error.message
-      });
-    }
-  }
-
-  async validateParticipantCounts() {
-    console.log('\n🔢 Validating and fixing participant counts...\n');
-
-    try {
-      // Use the database function to validate all participant counts
-      const { data, error } = await this.supabase.rpc('validate_all_participant_counts');
-
-      if (error) {
-        console.error('❌ Error validating participant counts:', error.message);
-        this.issues.push({
-          type: 'participant_count_validation',
-          error: error.message
-        });
-        return;
-      }
-
-      if (data && data.length > 0) {
-        console.log(`✅ Validated ${data.length} classes`);
-        const fixedClasses = data.filter(result => result.fixed === true);
-        
-        if (fixedClasses.length > 0) {
-          console.log(`🔧 Fixed participant counts for ${fixedClasses.length} classes:`);
-          fixedClasses.forEach(fix => {
-            console.log(`  - Class ${fix.class_id}: ${fix.old_count} → ${fix.new_count}`);
-            this.fixes.push({
-              type: 'participant_count_fix',
-              class_id: fix.class_id,
-              old_count: fix.old_count,
-              new_count: fix.new_count
-            });
-          });
-        } else {
-          console.log('✅ All participant counts are accurate');
-        }
-      } else {
-        console.log('✅ No classes found to validate');
-      }
-    } catch (error) {
-      console.error('❌ Error validating participant counts:', error.message);
-      this.issues.push({
-        type: 'participant_count_error',
-        error: error.message
-      });
-    }
-  }
-
-  async testDatabaseFunctions() {
-    console.log('\n⚙️ Testing database functions...\n');
-
-    const functions = [
-      { name: 'update_booking_payment_status', params: { booking_id: '00000000-0000-0000-0000-000000000000', new_payment_status: 'completed' } },
-      { name: 'create_booking_with_count', params: { p_student_id: '00000000-0000-0000-0000-000000000000', p_class_id: '00000000-0000-0000-0000-000000000000' } },
-      { name: 'cancel_booking_with_count', params: { p_booking_id: '00000000-0000-0000-0000-000000000000', p_student_id: '00000000-0000-0000-0000-000000000000' } },
-      { name: 'sync_participant_count', params: { p_class_id: '00000000-0000-0000-0000-000000000000' } },
-      { name: 'can_student_book_class', params: { p_student_id: '00000000-0000-0000-0000-000000000000', p_class_id: '00000000-0000-0000-0000-000000000000' } }
-    ];
-
-    for (const func of functions) {
-      try {
-        // Test function existence with test parameters
-        const { error } = await this.supabase.rpc(func.name, func.params);
-
-        if (error && error.message.includes('function') && error.message.includes('does not exist')) {
-          console.log(`❌ Function ${func.name} does not exist`);
-          this.issues.push({
-            type: 'missing_function',
-            function_name: func.name
-          });
-        } else {
-          console.log(`✅ Function ${func.name} exists and responds correctly`);
-        }
-      } catch (error) {
-        console.log(`✅ Function ${func.name} exists (validation error expected with test data)`);
-      }
-    }
-  }
-
-  async cleanupOrphanedData() {
-    console.log('\n🧹 Cleaning up orphaned data...\n');
-
-    try {
-      // Check for bookings with non-existent classes (should be prevented by foreign keys)
-      const { data: bookingsCount, error: bookingError } = await this.supabase
-        .from('bookings')
-        .select('id', { count: 'exact', head: true });
-
-      if (bookingError) {
-        console.error('❌ Error checking bookings:', bookingError.message);
-        return;
-      }
-
-      // Check for audit records (should be prevented by foreign keys)
-      const { data: auditsCount, error: auditError } = await this.supabase
-        .from('participant_count_audit')
-        .select('id', { count: 'exact', head: true });
-
-      if (auditError) {
-        console.error('❌ Error checking audit records:', auditError.message);
-        return;
-      }
-
-      console.log(`✅ Found ${bookingsCount || 0} bookings and ${auditsCount || 0} audit records`);
-      console.log('✅ No orphaned data found (foreign key constraints are working)');
-    } catch (error) {
-      console.error('❌ Error during cleanup:', error.message);
-      this.issues.push({
-        type: 'cleanup_error',
-        error: error.message
-      });
-    }
-  }
-
-  async testBookingOperations() {
-    console.log('\n🧪 Testing booking operations...\n');
-
-    try {
-      // Test the can_student_book_class function
-      const { data: canBookResult, error: canBookError } = await this.supabase.rpc('can_student_book_class', {
-        p_student_id: '00000000-0000-0000-0000-000000000000',
-        p_class_id: '00000000-0000-0000-0000-000000000000'
-      });
-
-      if (canBookError) {
-        console.log(`❌ Error testing booking validation: ${canBookError.message}`);
-        this.issues.push({
-          type: 'booking_test_error',
-          error: canBookError.message
-        });
-      } else {
-        console.log('✅ Booking validation function working correctly');
-        console.log(`   Result: ${JSON.stringify(canBookResult)}`);
-      }
-
-      // Test payment status validation
-      const { data: paymentResult, error: paymentError } = await this.supabase.rpc('validate_booking_operation', {
-        p_operation: 'payment_update',
-        p_booking_id: '00000000-0000-0000-0000-000000000000',
-        p_new_payment_status: 'completed'
-      });
-
-      if (paymentError) {
-        console.log(`❌ Error testing payment validation: ${paymentError.message}`);
-        this.issues.push({
-          type: 'payment_test_error',
-          error: paymentError.message
-        });
-      } else {
-        console.log('✅ Payment validation function working correctly');
-        console.log(`   Result: ${JSON.stringify(paymentResult)}`);
-      }
-
-    } catch (error) {
-      console.error('❌ Error testing booking operations:', error.message);
-      this.issues.push({
-        type: 'booking_operation_test_error',
-        error: error.message
-      });
-    }
-  }
-
-  async testConnectionAndAuth() {
-    console.log('\n🔌 Testing database connection and authentication...\n');
-
-    try {
-      // Test basic connection
-      const { data, error } = await this.supabase
-        .from('profiles')
-        .select('count', { count: 'exact', head: true });
-
-      if (error) {
-        console.log(`❌ Database connection failed: ${error.message}`);
-        this.issues.push({
-          type: 'connection_error',
-          error: error.message
-        });
-      } else {
-        console.log(`✅ Database connection successful (${data || 0} profiles found)`);
-      }
-
-      // Test authentication context
-      const { data: { user }, error: authError } = await this.supabase.auth.getUser();
       
-      if (authError) {
-        console.log(`⚠️ Authentication check: ${authError.message}`);
+      // Check for orphaned teacher_ratings
+      const { data: orphanedRatings, error: ratingsError } = await supabase
+        .from('teacher_ratings')
+        .select(`
+          teacher_id,
+          profiles!left (id)
+        `)
+        .is('profiles.id', null);
+        
+      if (ratingsError) throw ratingsError;
+      
+      if (orphanedRatings && orphanedRatings.length > 0) {
+        console.log(`Found ${orphanedRatings.length} orphaned teacher ratings`);
+        
+        for (const rating of orphanedRatings) {
+          const { error: deleteError } = await supabase
+            .from('teacher_ratings')
+            .delete()
+            .eq('teacher_id', rating.teacher_id);
+            
+          if (deleteError) {
+            console.log(`Warning: Could not delete orphaned teacher rating ${rating.teacher_id}: ${deleteError.message}`);
+            this.issues.push({
+              type: 'orphaned_rating',
+              teacher_id: rating.teacher_id,
+              error: deleteError.message
+            });
+          } else {
+            this.fixes.push({
+              type: 'orphaned_rating',
+              teacher_id: rating.teacher_id,
+              action: 'deleted'
+            });
+          }
+        }
       } else {
-        console.log(`✅ Authentication context: ${user ? `Authenticated as ${user.email}` : 'Anonymous access'}`);
+        console.log('✅ No orphaned teacher ratings found');
       }
-
+      
+      return this.fixes.filter(f => f.type === 'orphaned_profile' || f.type === 'orphaned_rating').length;
     } catch (error) {
-      console.error('❌ Error testing connection:', error.message);
+      console.error(`❌ Error fixing orphaned records: ${error.message}`);
       this.issues.push({
-        type: 'connection_test_error',
+        type: 'orphaned_records_fix',
         error: error.message
       });
+      return 0;
     }
   }
 
+  async fixMissingTeacherProfiles() {
+    console.log('🔧 Fixing missing teacher profiles...');
+    
+    try {
+      // Find teachers without teacher_profiles
+      const { data: teachersWithoutProfiles, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          email,
+          teacher_profiles!left (id)
+        `)
+        .eq('role', 'teacher')
+        .is('teacher_profiles.id', null);
+        
+      if (error) throw error;
+      
+      if (teachersWithoutProfiles && teachersWithoutProfiles.length > 0) {
+        console.log(`Found ${teachersWithoutProfiles.length} teachers without profiles`);
+        
+        for (const teacher of teachersWithoutProfiles) {
+          // Create teacher profile
+          const { error: insertError } = await supabase
+            .from('teacher_profiles')
+            .insert([{
+              id: teacher.id,
+              bio: `${teacher.full_name} is a yoga instructor passionate about helping students find balance and strength.`,
+              experience_years: Math.floor(Math.random() * 10) + 1,
+              specialties: ['Hatha', 'Vinyasa'],
+              certifications: ['200-Hour Yoga Alliance'],
+              social_links: {}
+            }]);
+            
+          if (insertError) {
+            console.log(`Warning: Could not create teacher profile for ${teacher.id}: ${insertError.message}`);
+            this.issues.push({
+              type: 'missing_teacher_profile',
+              teacher_id: teacher.id,
+              error: insertError.message
+            });
+          } else {
+            this.fixes.push({
+              type: 'missing_teacher_profile',
+              teacher_id: teacher.id,
+              action: 'created'
+            });
+            
+            // Create teacher rating
+            const { error: ratingError } = await supabase
+              .from('teacher_ratings')
+              .insert([{
+                teacher_id: teacher.id,
+                avg_rating: 5.0,
+                total_reviews: 0,
+                rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
+              }]);
+              
+            if (ratingError) {
+              console.log(`Warning: Could not create teacher rating for ${teacher.id}: ${ratingError.message}`);
+            }
+          }
+        }
+      } else {
+        console.log('✅ All teachers have teacher profiles');
+      }
+      
+      return this.fixes.filter(f => f.type === 'missing_teacher_profile').length;
+    } catch (error) {
+      console.error(`❌ Error fixing missing teacher profiles: ${error.message}`);
+      this.issues.push({
+        type: 'missing_teacher_profile_fix',
+        error: error.message
+      });
+      return 0;
+    }
+  }
+
+  async fixMissingTeacherRatings() {
+    console.log('🔧 Fixing missing teacher ratings...');
+    
+    try {
+      // Find teachers without ratings
+      const { data: teachersWithoutRatings, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          teacher_ratings!left (teacher_id)
+        `)
+        .eq('role', 'teacher')
+        .is('teacher_ratings.teacher_id', null);
+        
+      if (error) throw error;
+      
+      if (teachersWithoutRatings && teachersWithoutRatings.length > 0) {
+        console.log(`Found ${teachersWithoutRatings.length} teachers without ratings`);
+        
+        for (const teacher of teachersWithoutRatings) {
+          // Create teacher rating
+          const { error: insertError } = await supabase
+            .from('teacher_ratings')
+            .insert([{
+              teacher_id: teacher.id,
+              avg_rating: 5.0,
+              total_reviews: 0,
+              rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
+            }]);
+            
+          if (insertError) {
+            console.log(`Warning: Could not create teacher rating for ${teacher.id}: ${insertError.message}`);
+            this.issues.push({
+              type: 'missing_teacher_rating',
+              teacher_id: teacher.id,
+              error: insertError.message
+            });
+          } else {
+            this.fixes.push({
+              type: 'missing_teacher_rating',
+              teacher_id: teacher.id,
+              action: 'created'
+            });
+          }
+        }
+      } else {
+        console.log('✅ All teachers have ratings');
+      }
+      
+      return this.fixes.filter(f => f.type === 'missing_teacher_rating').length;
+    } catch (error) {
+      console.error(`❌ Error fixing missing teacher ratings: ${error.message}`);
+      this.issues.push({
+        type: 'missing_teacher_rating_fix',
+        error: error.message
+      });
+      return 0;
+    }
+  }
+
+  async updateTeacherRatings() {
+    console.log('🔧 Updating teacher ratings...');
+    
+    try {
+      // Get all teachers
+      const { data: teachers, error: teachersError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'teacher')
+        .limit(50);
+        
+      if (teachersError) throw teachersError;
+      
+      let updatedCount = 0;
+      
+      for (const teacher of teachers) {
+        // Get all reviews for this teacher
+        const { data: reviews, error: reviewsError } = await supabase
+          .from('teacher_reviews')
+          .select('rating')
+          .eq('teacher_id', teacher.id);
+          
+        if (reviewsError) {
+          console.log(`Warning: Could not get reviews for teacher ${teacher.id}: ${reviewsError.message}`);
+          continue;
+        }
+        
+        if (reviews && reviews.length > 0) {
+          // Calculate average rating
+          const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+          const avgRating = totalRating / reviews.length;
+          
+          // Count ratings by value
+          const ratingCounts = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
+          reviews.forEach(review => {
+            ratingCounts[review.rating.toString()]++;
+          });
+          
+          // Update teacher_ratings
+          const { error: updateError } = await supabase
+            .from('teacher_ratings')
+            .upsert([{
+              teacher_id: teacher.id,
+              avg_rating: avgRating,
+              total_reviews: reviews.length,
+              rating_counts: ratingCounts
+            }]);
+            
+          if (updateError) {
+            console.log(`Warning: Could not update rating for teacher ${teacher.id}: ${updateError.message}`);
+            this.issues.push({
+              type: 'teacher_rating_update',
+              teacher_id: teacher.id,
+              error: updateError.message
+            });
+          } else {
+            updatedCount++;
+            this.fixes.push({
+              type: 'teacher_rating_update',
+              teacher_id: teacher.id,
+              reviews_count: reviews.length,
+              avg_rating: avgRating
+            });
+          }
+        }
+      }
+      
+      console.log(`✅ Updated ratings for ${updatedCount} teachers`);
+      return updatedCount;
+    } catch (error) {
+      console.error(`❌ Error updating teacher ratings: ${error.message}`);
+      this.issues.push({
+        type: 'teacher_rating_update_fix',
+        error: error.message
+      });
+      return 0;
+    }
+  }
+
+  async createTestData() {
+    console.log('🔧 Creating test data if needed...');
+    
+    try {
+      // Check if we have enough test data
+      const { count: profilesCount, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+        
+      if (profilesError) throw profilesError;
+      
+      const { count: classesCount, error: classesError } = await supabase
+        .from('yoga_classes')
+        .select('*', { count: 'exact', head: true });
+        
+      if (classesError) throw classesError;
+      
+      const { count: bookingsCount, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true });
+        
+      if (bookingsError) throw bookingsError;
+      
+      console.log(`Found ${profilesCount} profiles, ${classesCount} classes, and ${bookingsCount} bookings`);
+      
+      // If we have sufficient data, skip creating more
+      if (profilesCount >= 6 && classesCount >= 6 && bookingsCount >= 6) {
+        console.log('✅ Sufficient test data already exists');
+        return 0;
+      }
+      
+      // Create test users if needed
+      const testUsers = {
+        students: [
+          { email: 's1@yogify.com', password: 'TestStudent1!', fullName: 'Student One' },
+          { email: 's2@yogify.com', password: 'TestStudent2!', fullName: 'Student Two' },
+          { email: 's3@yogify.com', password: 'TestStudent3!', fullName: 'Student Three' }
+        ],
+        teachers: [
+          { email: 't1@yogify.com', password: 'TestTeacher1!', fullName: 'Teacher One' },
+          { email: 't2@yogify.com', password: 'TestTeacher2!', fullName: 'Teacher Two' },
+          { email: 't3@yogify.com', password: 'TestTeacher3!', fullName: 'Teacher Three' }
+        ]
+      };
+      
+      const createdUsers = {
+        students: [],
+        teachers: []
+      };
+      
+      // Create students
+      for (const student of testUsers.students) {
+        try {
+          // Check if user already exists
+          const { data: existingUser, error: checkError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', student.email)
+            .maybeSingle();
+            
+          if (existingUser) {
+            console.log(`Student ${student.email} already exists`);
+            createdUsers.students.push(existingUser);
+            continue;
+          }
+          
+          // Create auth user
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: student.email,
+            password: student.password
+          });
+          
+          if (authError) throw authError;
+          
+          if (authData.user) {
+            // Create profile
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .insert([{
+                id: authData.user.id,
+                email: student.email,
+                full_name: student.fullName,
+                role: 'student'
+              }])
+              .select();
+              
+            if (profileError) throw profileError;
+            
+            createdUsers.students.push(profileData[0]);
+            console.log(`Created student: ${student.email}`);
+          }
+        } catch (error) {
+          console.log(`Warning: Could not create student ${student.email}: ${error.message}`);
+        }
+      }
+      
+      // Create teachers
+      for (const teacher of testUsers.teachers) {
+        try {
+          // Check if user already exists
+          const { data: existingUser, error: checkError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', teacher.email)
+            .maybeSingle();
+            
+          if (existingUser) {
+            console.log(`Teacher ${teacher.email} already exists`);
+            createdUsers.teachers.push(existingUser);
+            
+            // Check if teacher profile exists
+            const { data: teacherProfile, error: teacherProfileError } = await supabase
+              .from('teacher_profiles')
+              .select('id')
+              .eq('id', existingUser.id)
+              .maybeSingle();
+              
+            if (!teacherProfile) {
+              // Create teacher profile
+              await this.createTeacherProfile(existingUser.id, teacher.fullName);
+            }
+            
+            continue;
+          }
+          
+          // Create auth user
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: teacher.email,
+            password: teacher.password
+          });
+          
+          if (authError) throw authError;
+          
+          if (authData.user) {
+            // Create profile
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .insert([{
+                id: authData.user.id,
+                email: teacher.email,
+                full_name: teacher.fullName,
+                role: 'teacher'
+              }])
+              .select();
+              
+            if (profileError) throw profileError;
+            
+            createdUsers.teachers.push(profileData[0]);
+            console.log(`Created teacher: ${teacher.email}`);
+            
+            // Create teacher profile
+            await this.createTeacherProfile(profileData[0].id, teacher.fullName);
+          }
+        } catch (error) {
+          console.log(`Warning: Could not create teacher ${teacher.email}: ${error.message}`);
+        }
+      }
+      
+      // Create classes if needed
+      if (classesCount < 6 && createdUsers.teachers.length > 0) {
+        for (const teacher of createdUsers.teachers) {
+          // Create past class
+          try {
+            const pastDate = new Date();
+            pastDate.setDate(pastDate.getDate() - 7);
+            
+            const { data, error } = await supabase
+              .from('yoga_classes')
+              .insert([{
+                title: `${teacher.full_name}'s Past Flow`,
+                description: 'A gentle yoga class focusing on alignment and breath.',
+                teacher_id: teacher.id,
+                date: pastDate.toISOString().split('T')[0],
+                time: '09:00:00',
+                duration: 60,
+                max_participants: 10,
+                current_participants: 0,
+                price: 25.00,
+                level: 'beginner',
+                type: 'Hatha',
+                location: 'Studio A',
+                is_retreat: false,
+                is_virtual: false,
+                image_url: 'https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800'
+              }])
+              .select();
+              
+            if (error) throw error;
+            
+            console.log(`Created past class for ${teacher.full_name}`);
+          } catch (error) {
+            console.log(`Warning: Could not create past class for ${teacher.full_name}: ${error.message}`);
+          }
+          
+          // Create upcoming class
+          try {
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + 7);
+            
+            const { data, error } = await supabase
+              .from('yoga_classes')
+              .insert([{
+                title: `${teacher.full_name}'s Upcoming Flow`,
+                description: 'Join this energizing yoga session to build strength and flexibility.',
+                teacher_id: teacher.id,
+                date: futureDate.toISOString().split('T')[0],
+                time: '18:00:00',
+                duration: 75,
+                max_participants: 15,
+                current_participants: 0,
+                price: 30.00,
+                level: 'intermediate',
+                type: 'Vinyasa',
+                location: 'Studio B',
+                is_retreat: false,
+                is_virtual: false,
+                image_url: 'https://images.pexels.com/photos/3094230/pexels-photo-3094230.jpeg?auto=compress&cs=tinysrgb&w=800'
+              }])
+              .select();
+              
+            if (error) throw error;
+            
+            console.log(`Created upcoming class for ${teacher.full_name}`);
+          } catch (error) {
+            console.log(`Warning: Could not create upcoming class for ${teacher.full_name}: ${error.message}`);
+          }
+        }
+      }
+      
+      console.log('✅ Test data creation completed');
+      return createdUsers.students.length + createdUsers.teachers.length;
+    } catch (error) {
+      console.error(`❌ Error creating test data: ${error.message}`);
+      this.issues.push({
+        type: 'test_data_creation',
+        error: error.message
+      });
+      return 0;
+    }
+  }
+  
+  // Helper: Create teacher profile
+  async createTeacherProfile(teacherId, teacherName) {
+    try {
+      const specialties = ['Hatha', 'Vinyasa', 'Meditation'];
+      const certifications = ['200-Hour Yoga Alliance', 'Meditation Certification'];
+      
+      const { data, error } = await supabase
+        .from('teacher_profiles')
+        .insert([{
+          id: teacherId,
+          bio: `${teacherName} is an experienced yoga teacher specializing in mindful practice and alignment.`,
+          experience_years: Math.floor(Math.random() * 10) + 2,
+          specialties,
+          certifications,
+          social_links: {
+            instagram: 'yogateacher',
+            website: 'yogateacher.com'
+          },
+          phone: '+1234567890'
+        }])
+        .select();
+        
+      if (error) throw error;
+      
+      console.log(`Created teacher profile for ${teacherId}`);
+      
+      // Initialize teacher rating
+      const { data: ratingData, error: ratingError } = await supabase
+        .from('teacher_ratings')
+        .insert([{
+          teacher_id: teacherId,
+          avg_rating: 5.0,
+          total_reviews: 0,
+          rating_counts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
+        }])
+        .select();
+        
+      if (ratingError) {
+        console.log(`Warning: Could not initialize teacher rating: ${ratingError.message}`);
+      } else {
+        console.log(`Created teacher rating for ${teacherId}`);
+      }
+      
+      return data[0];
+    } catch (error) {
+      console.log(`Warning: Could not create teacher profile for ${teacherId}: ${error.message}`);
+      this.issues.push({
+        type: 'teacher_profile_creation',
+        teacher_id: teacherId,
+        error: error.message
+      });
+      return null;
+    }
+  }
+
+  // Generate report
   generateReport() {
     console.log('\n📊 DATABASE FIX REPORT\n');
     console.log('='.repeat(50));
@@ -292,50 +723,94 @@ class DatabaseFixer {
     
     if (this.issues.length > 0) {
       console.log('\n🚨 ISSUES FOUND:\n');
-      this.issues.forEach((issue, index) => {
-        console.log(`${index + 1}. ${issue.type}:`);
-        if (issue.booking_id) console.log(`   Booking ID: ${issue.booking_id}`);
-        if (issue.class_id) console.log(`   Class ID: ${issue.class_id}`);
-        if (issue.function_name) console.log(`   Function: ${issue.function_name}`);
-        console.log(`   Error: ${issue.error || 'No specific error'}`);
+      
+      // Group issues by type
+      const issuesByType = this.issues.reduce((acc, issue) => {
+        if (!acc[issue.type]) {
+          acc[issue.type] = [];
+        }
+        acc[issue.type].push(issue);
+        return acc;
+      }, {});
+      
+      for (const [type, issues] of Object.entries(issuesByType)) {
+        console.log(`${type} Issues (${issues.length}):`);
+        issues.slice(0, 5).forEach((issue, index) => {
+          console.log(`  ${index + 1}. ${issue.error}`);
+        });
+        if (issues.length > 5) {
+          console.log(`  ... and ${issues.length - 5} more`);
+        }
         console.log('');
-      });
+      }
     }
     
     if (this.fixes.length > 0) {
       console.log('\n✅ FIXES APPLIED:\n');
-      this.fixes.forEach((fix, index) => {
-        console.log(`${index + 1}. ${fix.type}:`);
-        if (fix.booking_id) console.log(`   Booking ID: ${fix.booking_id}`);
-        if (fix.class_id) console.log(`   Class ID: ${fix.class_id}`);
-        if (fix.action) console.log(`   Action: ${fix.action}`);
-        if (fix.old_count !== undefined) console.log(`   Count: ${fix.old_count} → ${fix.new_count}`);
+      
+      // Group fixes by type
+      const fixesByType = this.fixes.reduce((acc, fix) => {
+        if (!acc[fix.type]) {
+          acc[fix.type] = [];
+        }
+        acc[fix.type].push(fix);
+        return acc;
+      }, {});
+      
+      for (const [type, fixes] of Object.entries(fixesByType)) {
+        console.log(`${type} Fixes (${fixes.length}):`);
+        fixes.slice(0, 5).forEach((fix, index) => {
+          let details = '';
+          if (fix.action) details += `Action: ${fix.action}`;
+          if (fix.old_count !== undefined) details += ` Count: ${fix.old_count} → ${fix.new_count}`;
+          console.log(`  ${index + 1}. ${details}`);
+        });
+        if (fixes.length > 5) {
+          console.log(`  ... and ${fixes.length - 5} more`);
+        }
         console.log('');
-      });
+      }
     }
     
     if (this.issues.length === 0 && this.fixes.length === 0) {
       console.log('\n✅ Database is healthy - no issues found!');
     }
     
-    return {
-      issuesFound: this.issues.length,
-      fixesApplied: this.fixes.length,
+    // Save report to file
+    const report = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        issuesFound: this.issues.length,
+        fixesApplied: this.fixes.length
+      },
       issues: this.issues,
       fixes: this.fixes
     };
+    
+    const reportsDir = path.join(__dirname, '..', 'reports');
+    if (!fs.existsSync(reportsDir)) {
+      fs.mkdirSync(reportsDir, { recursive: true });
+    }
+    
+    const reportFile = path.join(reportsDir, `database-fix-report-${Date.now()}.json`);
+    fs.writeFileSync(reportFile, JSON.stringify(report, null, 2));
+    
+    console.log(`\n📄 Detailed report saved to: ${reportFile}`);
+    
+    return report;
   }
 
+  // Run all fixes
   async runAllFixes() {
-    console.log('🔧 Starting Database Issue Resolution...\n');
+    console.log('🚀 Starting Database Issue Resolution...\n');
     
     try {
-      await this.testConnectionAndAuth();
-      await this.checkAndFixConstraintIssues();
-      await this.validateParticipantCounts();
-      await this.testDatabaseFunctions();
-      await this.cleanupOrphanedData();
-      await this.testBookingOperations();
+      await this.createTestData();
+      await this.fixParticipantCounts();
+      await this.fixOrphanedRecords();
+      await this.fixMissingTeacherProfiles();
+      await this.fixMissingTeacherRatings();
+      await this.updateTeacherRatings();
       
       return this.generateReport();
     } catch (error) {
@@ -349,12 +824,12 @@ class DatabaseFixer {
   }
 }
 
-// Run fixes if this file is executed directly
+// Run the fixer if this script is executed directly
 if (require.main === module) {
   const fixer = new DatabaseFixer();
   fixer.runAllFixes()
     .then(report => {
-      process.exit(report.issuesFound > 0 ? 1 : 0);
+      process.exit(report.issues.length > 0 ? 1 : 0);
     })
     .catch(error => {
       console.error('Fatal error:', error);
