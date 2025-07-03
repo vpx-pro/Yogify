@@ -3,19 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ScrollVi
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { 
-  User, 
-  Settings, 
-  CircleHelp as HelpCircle, 
-  LogOut, 
-  Mail, 
-  Calendar, 
-  Heart, 
-  Star, 
-  Award, 
-  Edit3, 
-  ChevronRight 
-} from 'lucide-react-native';
+import { User, Settings, CircleHelp as HelpCircle, LogOut, Mail, Calendar, Heart, Star, Award, CreditCard as Edit3, ChevronRight } from 'lucide-react-native';
 import TeacherAvatar from '@/components/TeacherAvatar';
 
 type SavedTeacher = {
