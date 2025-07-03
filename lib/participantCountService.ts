@@ -35,18 +35,23 @@ export class ParticipantCountService {
     status: 'confirmed' | 'cancelled' = 'confirmed',
     paymentStatus: 'pending' | 'completed' | 'failed' | 'refunded' = 'pending'
   ): Promise<string> {
-    const { data, error } = await supabase.rpc('create_booking_with_count', {
-      p_student_id: studentId,
-      p_class_id: classId,
-      p_status: status,
-      p_payment_status: paymentStatus
-    });
+    try {
+      const { data, error } = await supabase.rpc('create_booking_with_count', {
+        p_student_id: studentId,
+        p_class_id: classId,
+        p_status: status,
+        p_payment_status: paymentStatus
+      });
 
-    if (error) {
-      throw new Error(error.message);
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error creating booking with count:', error);
+      throw error;
     }
-
-    return data;
   }
 
   /**
@@ -56,44 +61,59 @@ export class ParticipantCountService {
     bookingId: string,
     studentId: string
   ): Promise<boolean> {
-    const { data, error } = await supabase.rpc('cancel_booking_with_count', {
-      p_booking_id: bookingId,
-      p_student_id: studentId
-    });
+    try {
+      const { data, error } = await supabase.rpc('cancel_booking_with_count', {
+        p_booking_id: bookingId,
+        p_student_id: studentId
+      });
 
-    if (error) {
-      throw new Error(error.message);
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error cancelling booking with count:', error);
+      throw error;
     }
-
-    return data;
   }
 
   /**
    * Synchronize participant count for a specific class
    */
   static async syncParticipantCount(classId: string): Promise<boolean> {
-    const { data, error } = await supabase.rpc('sync_participant_count', {
-      p_class_id: classId
-    });
+    try {
+      const { data, error } = await supabase.rpc('sync_participant_count', {
+        class_id_param: classId
+      });
 
-    if (error) {
-      throw new Error(error.message);
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error syncing participant count:', error);
+      throw error;
     }
-
-    return data;
   }
 
   /**
    * Validate and fix all class participant counts
    */
   static async validateAllParticipantCounts(): Promise<CountValidationResult[]> {
-    const { data, error } = await supabase.rpc('validate_all_participant_counts');
+    try {
+      const { data, error } = await supabase.rpc('validate_all_participant_counts');
 
-    if (error) {
-      throw new Error(error.message);
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error validating participant counts:', error);
+      throw error;
     }
-
-    return data || [];
   }
 
   /**
@@ -103,36 +123,46 @@ export class ParticipantCountService {
     classId: string,
     limit: number = 50
   ): Promise<ParticipantCountAudit[]> {
-    const { data, error } = await supabase
-      .from('participant_count_audit')
-      .select('*')
-      .eq('class_id', classId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    try {
+      const { data, error } = await supabase
+        .from('participant_count_audit')
+        .select('*')
+        .eq('class_id', classId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    if (error) {
-      throw new Error(error.message);
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching participant count audit:', error);
+      throw error;
     }
-
-    return data || [];
   }
 
   /**
    * Get real-time participant count for a class
    */
   static async getRealTimeParticipantCount(classId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from('bookings')
-      .select('*', { count: 'exact', head: true })
-      .eq('class_id', classId)
-      .eq('status', 'confirmed')
-      .eq('payment_status', 'completed');
+    try {
+      const { count, error } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('class_id', classId)
+        .eq('status', 'confirmed')
+        .eq('payment_status', 'completed');
 
-    if (error) {
-      throw new Error(error.message);
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error('Error getting real-time participant count:', error);
+      throw error;
     }
-
-    return count || 0;
   }
 
   /**
@@ -281,36 +311,41 @@ export class ParticipantCountService {
     fullClasses: number;
     utilizationRate: number;
   }> {
-    const { data: classes, error } = await supabase
-      .from('yoga_classes')
-      .select('current_participants, max_participants')
-      .eq('teacher_id', teacherId);
+    try {
+      const { data: classes, error } = await supabase
+        .from('yoga_classes')
+        .select('current_participants, max_participants')
+        .eq('teacher_id', teacherId);
 
-    if (error) {
-      throw new Error(error.message);
-    }
+      if (error) {
+        throw new Error(error.message);
+      }
 
-    if (!classes || classes.length === 0) {
+      if (!classes || classes.length === 0) {
+        return {
+          totalClasses: 0,
+          totalParticipants: 0,
+          averageParticipants: 0,
+          fullClasses: 0,
+          utilizationRate: 0
+        };
+      }
+
+      const totalClasses = classes.length;
+      const totalParticipants = classes.reduce((sum, cls) => sum + cls.current_participants, 0);
+      const totalCapacity = classes.reduce((sum, cls) => sum + cls.max_participants, 0);
+      const fullClasses = classes.filter(cls => cls.current_participants >= cls.max_participants).length;
+      
       return {
-        totalClasses: 0,
-        totalParticipants: 0,
-        averageParticipants: 0,
-        fullClasses: 0,
-        utilizationRate: 0
+        totalClasses,
+        totalParticipants,
+        averageParticipants: totalParticipants / totalClasses,
+        fullClasses,
+        utilizationRate: totalCapacity > 0 ? (totalParticipants / totalCapacity) * 100 : 0
       };
+    } catch (error) {
+      console.error('Error getting teacher participant stats:', error);
+      throw error;
     }
-
-    const totalClasses = classes.length;
-    const totalParticipants = classes.reduce((sum, cls) => sum + cls.current_participants, 0);
-    const totalCapacity = classes.reduce((sum, cls) => sum + cls.max_participants, 0);
-    const fullClasses = classes.filter(cls => cls.current_participants >= cls.max_participants).length;
-    
-    return {
-      totalClasses,
-      totalParticipants,
-      averageParticipants: totalParticipants / totalClasses,
-      fullClasses,
-      utilizationRate: totalCapacity > 0 ? (totalParticipants / totalCapacity) * 100 : 0
-    };
   }
 }

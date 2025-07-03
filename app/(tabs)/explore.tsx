@@ -218,13 +218,11 @@ export default function ExploreScreen() {
           
         if (error) throw error;
       } else {
-        // Add to favorites
-        const { error } = await supabase
-          .from('saved_teachers')
-          .insert({
-            student_id: profile.id,
-            teacher_id: teacherId
-          });
+        // Use the secure function to add favorite
+        const { error } = await supabase.rpc('save_teacher_for_student', {
+          student_id_param: profile.id,
+          teacher_id_param: teacherId
+        });
           
         if (error) throw error;
       }
@@ -259,7 +257,19 @@ export default function ExploreScreen() {
       });
 
       setParticipantCounts(counts);
-    } catch (error) {
+
+      // Sync any items where the stored count doesn't match actual count
+      const syncPromises = allItems
+        .filter(item => counts[item.id] !== item.current_participants)
+        .map(item => 
+          supabase.rpc('sync_participant_count', { class_id_param: item.id })
+        );
+
+      if (syncPromises.length > 0) {
+        await Promise.all(syncPromises);
+        fetchClassesAndRetreats();
+      }
+    } catch (error: any) {
       console.error('Error fetching participant counts:', error);
     }
   };

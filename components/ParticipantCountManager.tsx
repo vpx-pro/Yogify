@@ -32,7 +32,7 @@ export default function ParticipantCountManager({
       setSyncStatus('idle');
 
       const { error } = await supabase.rpc('sync_participant_count', {
-        p_class_id: targetClassId
+        class_id_param: targetClassId
       });
 
       if (error) throw error;

@@ -30,6 +30,7 @@ import {
   MessageSquare 
 } from 'lucide-react-native';
 import TeacherAvatar from '@/components/TeacherAvatar';
+import { ParticipantCountService } from '@/lib/participantCountService';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -199,27 +200,13 @@ export default function ClassDetailScreen() {
           
         if (error) throw error;
       } else {
-        try {
-          // Use the secure function to save teacher
-          const { error } = await supabase.rpc('save_teacher_for_student', {
-            student_id_param: profile.id,
-            teacher_id_param: yogaClass.teacher_id
-          });
+        // Use the secure function to add favorite
+        const { error } = await supabase.rpc('save_teacher_for_student', {
+          student_id_param: profile.id,
+          teacher_id_param: yogaClass.teacher_id
+        });
           
-          if (error) throw error;
-        } catch (error) {
-          console.error('Error using secure function:', error);
-          
-          // Fallback to direct insert
-          const { error: insertError } = await supabase
-            .from('saved_teachers')
-            .insert({
-              student_id: profile.id,
-              teacher_id: yogaClass.teacher_id
-            });
-            
-          if (insertError) throw insertError;
-        }
+        if (error) throw error;
       }
     } catch (error: any) {
       console.error('Error toggling favorite teacher:', error);
@@ -282,12 +269,7 @@ export default function ClassDetailScreen() {
       });
 
       if (error) throw error;
-      
-      if (data && typeof data === 'object' && 'can_review' in data) {
-        setCanReview(data.can_review);
-      } else {
-        setCanReview(false);
-      }
+      setCanReview(data.can_review);
     } catch (error: any) {
       console.error('Error checking review eligibility:', error);
       setCanReview(false);
@@ -323,7 +305,6 @@ export default function ClassDetailScreen() {
     }
 
     setBooking(true);
-    
     try {
       // First check if we can book this class
       const { data: canBookData, error: canBookError } = await supabase.rpc('can_student_book_class', {
@@ -333,11 +314,11 @@ export default function ClassDetailScreen() {
 
       if (canBookError) throw canBookError;
 
-      if (!canBookData || !canBookData.can_book) {
+      if (!canBookData.can_book) {
         let alertTitle = 'Cannot Book Class';
-        let alertMessage = canBookData?.message || 'Unable to book this class.';
+        let alertMessage = canBookData.message || 'Unable to book this class.';
 
-        switch (canBookData?.reason) {
+        switch (canBookData.reason) {
           case 'already_booked':
             alertTitle = 'Already Booked';
             alertMessage = 'You have already booked this class.';
@@ -361,17 +342,15 @@ export default function ClassDetailScreen() {
         return;
       }
 
-      // Try to use the secure booking function
+      // Use the secure booking function that handles participant count management
       try {
-        const { data, error } = await supabase.rpc('create_booking_with_count', {
-          p_student_id: profile.id,
-          p_class_id: yogaClass.id,
-          p_status: 'confirmed',
-          p_payment_status: 'pending'
-        });
+        const bookingId = await ParticipantCountService.createBookingWithCount(
+          profile.id,
+          yogaClass.id,
+          'confirmed',
+          'pending'
+        );
 
-        if (error) throw error;
-        
         // Refresh all data to ensure UI is in sync
         await Promise.all([
           fetchActualParticipantCount(),
@@ -384,60 +363,31 @@ export default function ClassDetailScreen() {
           pathname: '/payment/[classId]',
           params: { 
             classId: yogaClass.id,
-            bookingId: data 
+            bookingId: bookingId 
           }
         });
-        return;
       } catch (error: any) {
-        console.error('Error using secure booking function:', error);
-        
-        // Fallback to direct insert if function fails
-        const { data, error: insertError } = await supabase
-          .from('bookings')
-          .insert({
-            student_id: profile.id,
-            class_id: yogaClass.id,
-            status: 'confirmed',
-            payment_status: 'pending'
-          })
-          .select();
-          
-        if (insertError) {
-          // Handle specific error cases
-          if (insertError.message.includes('already has a booking')) {
-            Alert.alert('Already Booked', 'You have already booked this class.');
-            await checkExistingBooking();
-            return;
-          } else if (insertError.message.includes('Class is full')) {
-            Alert.alert('Class Full', 'This class is now full. Please try another class.');
-            await fetchActualParticipantCount();
-            return;
-          } else if (insertError.message.includes('Cannot book past classes')) {
-            Alert.alert('Class Unavailable', 'This class has already started or ended.');
-            return;
-          } else if (insertError.message.includes('duplicate key value violates unique constraint')) {
-            Alert.alert('Already Booked', 'You have already booked this class.');
-            await checkExistingBooking();
-            return;
-          }
-          throw insertError;
+        // Handle specific error cases
+        if (error.message.includes('already has a booking')) {
+          Alert.alert('Already Booked', 'You have already booked this class.');
+          await checkExistingBooking();
+          return;
+        } else if (error.message.includes('Class is full')) {
+          Alert.alert('Class Full', 'This class is now full. Please try another class.');
+          await fetchActualParticipantCount();
+          return;
+        } else if (error.message.includes('Cannot book past classes')) {
+          Alert.alert('Class Unavailable', 'This class has already started or ended.');
+          return;
+        } else if (error.message.includes('duplicate key value violates unique constraint')) {
+          Alert.alert('Already Booked', 'You have already booked this class.');
+          await checkExistingBooking();
+          return;
+        } else if (error.message.includes('Booking system is busy')) {
+          Alert.alert('System Busy', 'The booking system is currently busy. Please try again in a moment.');
+          return;
         }
-
-        // Refresh all data to ensure UI is in sync
-        await Promise.all([
-          fetchActualParticipantCount(),
-          checkExistingBooking(),
-          fetchClassDetails()
-        ]);
-
-        // Navigate to payment screen
-        router.push({
-          pathname: '/payment/[classId]',
-          params: { 
-            classId: yogaClass.id,
-            bookingId: data[0].id 
-          }
-        });
+        throw error;
       }
     } catch (error: any) {
       console.error('Error booking class:', error);
@@ -455,6 +405,8 @@ export default function ClassDetailScreen() {
           errorMessage = 'This class has already started or ended.';
         } else if (error.message.includes('Booking system is busy')) {
           errorMessage = 'The booking system is currently busy. Please try again in a moment.';
+        } else if (error.message.includes('Class not found')) {
+          errorMessage = 'This class could not be found. It may have been cancelled.';
         }
       }
       

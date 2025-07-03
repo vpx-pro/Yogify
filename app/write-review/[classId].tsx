@@ -56,17 +56,8 @@ export default function WriteReviewScreen() {
       });
 
       if (error) throw error;
-      
-      if (data && typeof data === 'object' && 'can_review' in data) {
-        setCanReview(data.can_review);
-        if (!data.can_review && 'message' in data) {
-          setErrorMessage(data.message);
-        }
-      } else {
-        setCanReview(false);
-        setErrorMessage('You cannot review this class');
-      }
-    } catch (error) {
+      setCanReview(data.can_review);
+    } catch (error: any) {
       console.error('Error checking review eligibility:', error);
       setErrorMessage('Failed to check if you can review this class');
       setCanReview(false);
@@ -105,46 +96,26 @@ export default function WriteReviewScreen() {
     setSubmitting(true);
     
     try {
-      // Try to use the secure function first
-      try {
-        const { error } = await supabase.rpc('create_teacher_review', {
-          student_id_param: profile.id,
-          teacher_id_param: yogaClass.teacher_id,
-          class_id_param: classId,
-          rating_param: rating,
-          comment_param: comment.trim() || null
-        });
-        
-        if (error) throw error;
-        
-        Alert.alert(
-          'Review Submitted',
-          'Thank you for your feedback!',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-        return;
-      } catch (funcError) {
-        console.error('Error using secure function:', funcError);
-        // Fall back to direct insert if function fails
-      }
-      
-      // Direct insert fallback
-      const { error } = await supabase
-        .from('teacher_reviews')
-        .insert({
-          student_id: profile.id,
-          teacher_id: yogaClass.teacher_id,
-          class_id: classId,
-          rating,
-          comment: comment.trim() || null
-        });
+      // Use the secure function to create a review
+      const { error } = await supabase.rpc('create_teacher_review', {
+        student_id_param: profile.id,
+        teacher_id_param: yogaClass.teacher_id,
+        class_id_param: classId,
+        rating_param: rating,
+        comment_param: comment.trim() || null
+      });
 
       if (error) throw error;
       
       Alert.alert(
         'Review Submitted',
         'Thank you for your feedback!',
-        [{ text: 'OK', onPress: () => router.back() }]
+        [
+          { 
+            text: 'OK', 
+            onPress: () => router.back() 
+          }
+        ]
       );
     } catch (error) {
       console.error('Error submitting review:', error);
