@@ -49,7 +49,7 @@ export default function ProfileScreen() {
 
       if (error) throw error;
       
-      const formattedTeachers = data?.map(item => ({
+      const formattedTeachers = (data as any[])?.map((item: any) => ({
         id: item.id,
         teacher_id: item.teacher_id,
         full_name: item.profiles?.full_name || 'Unknown Teacher',

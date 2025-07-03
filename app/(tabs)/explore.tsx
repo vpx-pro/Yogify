@@ -35,7 +35,7 @@ import {
 } from 'lucide-react-native';
 import RetreatCard from '@/components/RetreatCard';
 import TeacherAvatar from '@/components/TeacherAvatar';
-import DateRangePicker from '@/components/DateRangePicker.tsx';
+import DateRangePicker from '@/components/DateRangePicker';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {

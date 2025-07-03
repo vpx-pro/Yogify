@@ -9,7 +9,7 @@ import {
   SafeAreaView
 } from 'react-native';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
 interface DateRange {
   startDate: Date | null;
@@ -204,9 +204,9 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
                   style={styles.androidPickerButton}
                   onPress={() => {
                     // This will trigger the native date picker
-                    DateTimePicker.open({
-                      value: currentStep === 'start' 
-                        ? (dateRange.startDate || new Date()) 
+                    DateTimePickerAndroid.open({
+                      value: currentStep === 'start'
+                        ? (dateRange.startDate || new Date())
                         : (dateRange.endDate || dateRange.startDate || new Date()),
                       mode: 'date',
                       display: 'default',

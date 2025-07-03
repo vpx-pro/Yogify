@@ -55,6 +55,14 @@ export type Database = {
           location: string;
           meeting_link?: string;
           image_url?: string;
+          is_retreat: boolean;
+          retreat_end_date?: string;
+          retreat_image_url?: string;
+          retreat_highlights?: string[];
+          retreat_capacity?: number;
+          is_virtual: boolean;
+          early_bird_price?: number;
+          early_bird_deadline?: string;
           created_at: string;
           updated_at: string;
         };
@@ -72,6 +80,14 @@ export type Database = {
           location: string;
           meeting_link?: string;
           image_url?: string;
+          is_retreat?: boolean;
+          retreat_end_date?: string;
+          retreat_image_url?: string;
+          retreat_highlights?: string[];
+          retreat_capacity?: number;
+          is_virtual?: boolean;
+          early_bird_price?: number;
+          early_bird_deadline?: string;
         };
         Update: {
           title?: string;
@@ -87,6 +103,14 @@ export type Database = {
           location?: string;
           meeting_link?: string;
           image_url?: string;
+          is_retreat?: boolean;
+          retreat_end_date?: string;
+          retreat_image_url?: string;
+          retreat_highlights?: string[];
+          retreat_capacity?: number;
+          is_virtual?: boolean;
+          early_bird_price?: number;
+          early_bird_deadline?: string;
           updated_at?: string;
         };
       };

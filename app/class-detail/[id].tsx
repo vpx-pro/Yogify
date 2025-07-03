@@ -103,7 +103,7 @@ export default function ClassDetailScreen() {
 
       if (error) throw error;
       setYogaClass(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching class details:', error);
       Alert.alert('Error', 'Failed to load class details.');
       router.back();
@@ -125,7 +125,7 @@ export default function ClassDetailScreen() {
 
       if (error) throw error;
       setActualParticipantCount(count || 0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching participant count:', error);
       setActualParticipantCount(0);
     }
@@ -150,7 +150,7 @@ export default function ClassDetailScreen() {
       if (data) {
         setExistingBooking(data);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking existing booking:', error);
     }
   };
@@ -168,7 +168,7 @@ export default function ClassDetailScreen() {
 
       if (error) throw error;
       setIsFavoriteTeacher(!!data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking favorite teacher status:', error);
     }
   };
@@ -217,7 +217,7 @@ export default function ClassDetailScreen() {
           if (error) throw error;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling favorite teacher:', error);
       
       // Revert optimistic update on error
@@ -254,7 +254,7 @@ export default function ClassDetailScreen() {
           rating: review.rating,
           comment: review.comment,
           created_at: review.created_at,
-          student_name: review.profiles?.full_name || 'Anonymous Student'
+          student_name: (review as any).profiles?.full_name || 'Anonymous Student'
         }));
         
         setReviews(formattedReviews);
@@ -263,7 +263,7 @@ export default function ClassDetailScreen() {
         const total = data.reduce((sum, review) => sum + review.rating, 0);
         setAverageRating(total / data.length);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching reviews:', error);
     }
   };
@@ -279,7 +279,7 @@ export default function ClassDetailScreen() {
 
       if (error) throw error;
       setCanReview(data.can_review);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking review eligibility:', error);
       setCanReview(false);
     }
@@ -398,7 +398,7 @@ export default function ClassDetailScreen() {
           bookingId: data 
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error booking class:', error);
       
       let errorMessage = 'Failed to book the class. Please try again.';
@@ -785,7 +785,7 @@ export default function ClassDetailScreen() {
                   <View style={[
                     styles.participantBar,
                     { 
-                      width: `${Math.min((actualParticipantCount / (isRetreat ? yogaClass.retreat_capacity : yogaClass.max_participants)) * 100, 100)}%` 
+                      width: `${Math.min((actualParticipantCount / (isRetreat ? (yogaClass!.retreat_capacity ?? yogaClass!.max_participants) : yogaClass!.max_participants)) * 100, 100)}%`
                     }
                   ]} />
                 </View>
@@ -920,7 +920,7 @@ export default function ClassDetailScreen() {
           </TouchableOpacity>
           {!existingBooking && !classFull && (
             <Text style={styles.spotsLeftText}>
-              {(isRetreat ? yogaClass.retreat_capacity : yogaClass.max_participants) - actualParticipantCount} spots left
+              {(isRetreat ? (yogaClass!.retreat_capacity ?? yogaClass!.max_participants) : yogaClass!.max_participants) - actualParticipantCount} spots left
             </Text>
           )}
         </View>
