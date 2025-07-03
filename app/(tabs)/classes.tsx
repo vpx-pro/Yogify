@@ -9,7 +9,12 @@ import CreateRetreatModal from '@/components/CreateRetreatModal';
 import RetreatCard from '@/components/RetreatCard';
 import type { Database } from '@/lib/supabase';
 
-type YogaClass = Database['public']['Tables']['yoga_classes']['Row'];
+type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
+  profiles: {
+    full_name: string;
+    avatar_url?: string;
+  };
+};
 
 export default function ClassesScreen() {
   const { profile } = useAuth();
@@ -60,7 +65,7 @@ export default function ClassesScreen() {
       
       setClasses(classesData);
       setRetreats(retreatsData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching classes and retreats:', error);
       Alert.alert('Error', 'Failed to load classes and retreats');
     } finally {
@@ -102,7 +107,7 @@ export default function ClassesScreen() {
         await Promise.all(syncPromises);
         fetchClassesAndRetreats();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching participant counts:', error);
     }
   };
@@ -126,7 +131,7 @@ export default function ClassesScreen() {
       setShowCreateModal(false);
       fetchClassesAndRetreats();
       Alert.alert('Success', 'Class created successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating class:', error);
       Alert.alert('Error', 'Failed to create class. Please try again.');
     } finally {
@@ -153,7 +158,7 @@ export default function ClassesScreen() {
       fetchClassesAndRetreats();
       setActiveTab('retreats'); // Switch to retreats tab to show the new retreat
       Alert.alert('Success', 'Retreat created successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating retreat:', error);
       Alert.alert('Error', 'Failed to create retreat. Please try again.');
     } finally {
@@ -219,7 +224,7 @@ export default function ClassesScreen() {
           { text: 'OK' }
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error booking class:', error);
       
       let errorMessage = 'Failed to book class. Please try again.';
@@ -263,7 +268,7 @@ export default function ClassesScreen() {
 
               fetchClassesAndRetreats();
               Alert.alert('Success', `${itemType} deleted successfully`);
-            } catch (error) {
+            } catch (error: any) {
               console.error(`Error deleting ${itemType}:`, error);
               Alert.alert('Error', `Failed to delete ${itemType}`);
             }
