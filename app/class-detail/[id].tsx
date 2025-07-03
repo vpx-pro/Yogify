@@ -407,6 +407,11 @@ export default function ClassDetailScreen() {
           errorMessage = 'The booking system is currently busy. Please try again in a moment.';
         } else if (error.message.includes('Class not found')) {
           errorMessage = 'This class could not be found. It may have been cancelled.';
+          // Refresh class data when class is not found
+          await Promise.all([
+            fetchClassDetails(),
+            fetchActualParticipantCount()
+          ]);
         }
       }
       
