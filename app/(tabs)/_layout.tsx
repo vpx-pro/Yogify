@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Calendar, User, BookOpen, Search, CalendarDays, ClipboardCheck, ChartBar as BarChart } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
 export default function TabLayout() {
   const { profile } = useAuth();
@@ -45,70 +45,62 @@ export default function TabLayout() {
         }}
       />
       
-      {/* Role-specific tabs */}
-      {isTeacher ? (
-        // Teacher-specific tabs
-        <>
-          <Tabs.Screen
-            name="classes"
-            options={{
-              title: 'My Classes',
-              tabBarIcon: ({ size, color }) => (
-                <Calendar size={size} color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="my-schedule"
-            options={{
-              title: 'Schedule',
-              tabBarIcon: ({ size, color }) => (
-                <CalendarDays size={size} color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="class-stats"
-            options={{
-              title: 'Stats',
-              tabBarIcon: ({ size, color }) => (
-                <BarChart size={size} color={color} />
-              ),
-            }}
-          />
-        </>
-      ) : (
-        // Student-specific tabs
-        <>
-          <Tabs.Screen
-            name="classes"
-            options={{
-              title: 'Classes',
-              tabBarIcon: ({ size, color }) => (
-                <Calendar size={size} color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="explore"
-            options={{
-              title: 'Explore',
-              tabBarIcon: ({ size, color }) => (
-                <Search size={size} color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="my-bookings"
-            options={{
-              title: 'Bookings',
-              tabBarIcon: ({ size, color }) => (
-                <ClipboardCheck size={size} color={color} />
-              ),
-            }}
-          />
-        </>
-      )}
+      {/* Classes tab - shown to all but with different title */}
+      <Tabs.Screen
+        name="classes"
+        options={{
+          title: isTeacher ? 'My Classes' : 'Classes',
+          tabBarIcon: ({ size, color }) => (
+            <Calendar size={size} color={color} />
+          ),
+        }}
+      />
+      
+      {/* Teacher-specific tabs */}
+      <Tabs.Screen
+        name="my-schedule"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ size, color }) => (
+            <CalendarDays size={size} color={color} />
+          ),
+          href: isTeacher ? undefined : null, // Hide if not a teacher
+        }}
+      />
+      
+      <Tabs.Screen
+        name="class-stats"
+        options={{
+          title: 'Stats',
+          tabBarIcon: ({ size, color }) => (
+            <BarChart size={size} color={color} />
+          ),
+          href: isTeacher ? undefined : null, // Hide if not a teacher
+        }}
+      />
+      
+      {/* Student-specific tabs */}
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'Explore',
+          tabBarIcon: ({ size, color }) => (
+            <Search size={size} color={color} />
+          ),
+          href: !isTeacher ? undefined : null, // Hide if not a student
+        }}
+      />
+      
+      <Tabs.Screen
+        name="my-bookings"
+        options={{
+          title: 'Bookings',
+          tabBarIcon: ({ size, color }) => (
+            <ClipboardCheck size={size} color={color} />
+          ),
+          href: !isTeacher ? undefined : null, // Hide if not a student
+        }}
+      />
       
       {/* Profile tab for all users */}
       <Tabs.Screen
