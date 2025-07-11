@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar, Clock, MapPin, Globe, Eye, X, Mail, User, Tent } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
+import EmptyStateIllustration from '@/components/EmptyStateIllustration';
 
 type ClassWithBookings = Database['public']['Tables']['yoga_classes']['Row'] & {
   bookings: Array<{
@@ -427,10 +428,19 @@ export default function MyScheduleScreen() {
               {upcomingClasses.length > 0 ? (
                 upcomingClasses.map((classItem) => renderClassCard(classItem, false))
               ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No upcoming classes scheduled.</Text>
-                  <Text style={styles.emptySubtext}>Create a new class to get started!</Text>
-                </View>
+                <EmptyStateIllustration
+                  type="classes"
+                  message="No upcoming classes scheduled"
+                  subMessage="Create a new class to get started!"
+                  action={
+                    <TouchableOpacity
+                      style={styles.createButton}
+                      onPress={() => alert('Create class functionality coming soon!')}
+                    >
+                      <Text style={styles.createButtonText}>Create Class</Text>
+                    </TouchableOpacity>
+                  }
+                />
               )}
             </View>
 
@@ -455,10 +465,19 @@ export default function MyScheduleScreen() {
               {upcomingRetreats.length > 0 ? (
                 upcomingRetreats.map((retreatItem) => renderClassCard(retreatItem, false))
               ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No upcoming retreats scheduled.</Text>
-                  <Text style={styles.emptySubtext}>Create a new retreat to get started!</Text>
-                </View>
+                <EmptyStateIllustration
+                  type="retreats"
+                  message="No upcoming retreats scheduled"
+                  subMessage="Create a new retreat to get started!"
+                  action={
+                    <TouchableOpacity
+                      style={styles.createButton}
+                      onPress={() => alert('Create retreat functionality coming soon!')}
+                    >
+                      <Text style={styles.createButtonText}>Create Retreat</Text>
+                    </TouchableOpacity>
+                  }
+                />
               )}
             </View>
 
@@ -483,10 +502,27 @@ export default function MyScheduleScreen() {
   );
 }
 
+// Add new styles
+const styles = StyleSheet.create({
+  ...styles,
+  createButton: {
+    backgroundColor: '#C27B5C',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  createButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4EDE4',
+    backgroundColor: '#F9F6F1',
   },
   header: {
     padding: 20,
@@ -519,7 +555,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
   },
   tabText: {
     fontSize: 16,
@@ -567,7 +603,7 @@ const styles = StyleSheet.create({
   },
   classCard: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 20,
     marginBottom: 16,
     elevation: 2,
@@ -598,7 +634,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   retreatBadge: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -683,7 +719,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#8B7355',
+    color: '#C27B5C',
   },
   viewStudentsButton: {
     flexDirection: 'row',
@@ -696,14 +732,12 @@ const styles = StyleSheet.create({
   },
   viewStudentsText: {
     fontSize: 12,
-    color: '#8B7355',
+    color: '#C27B5C',
     fontWeight: '500',
   },
   emptyState: {
     padding: 40,
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
   },
   emptyText: {
     fontSize: 16,
@@ -718,7 +752,7 @@ const styles = StyleSheet.create({
   },
   moreItemsText: {
     fontSize: 14,
-    color: '#8B7355',
+    color: '#C27B5C',
     textAlign: 'center',
     marginTop: 8,
   },

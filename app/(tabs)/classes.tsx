@@ -7,6 +7,8 @@ import { useRouter } from 'expo-router';
 import CreateClassModal from '@/components/CreateClassModal';
 import CreateRetreatModal from '@/components/CreateRetreatModal';
 import RetreatCard from '@/components/RetreatCard';
+import EmptyStateIllustration from '@/components/EmptyStateIllustration';
+import { formatDate, formatTime, isClassPast } from '@/lib/utils';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -278,35 +280,10 @@ export default function ClassesScreen() {
     );
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const formatTime = (timeString: string) => {
-    const [hours, minutes] = timeString.split(':');
-    const date = new Date();
-    date.setHours(parseInt(hours), parseInt(minutes));
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
   const isItemFull = (item: YogaClass) => {
     const actualCount = participantCounts[item.id] || item.current_participants;
     const maxCapacity = item.is_retreat ? item.retreat_capacity : item.max_participants;
     return actualCount >= (maxCapacity || item.max_participants);
-  };
-
-  const isItemPast = (dateString: string, timeString: string) => {
-    const itemDateTime = new Date(`${dateString} ${timeString}`);
-    return itemDateTime < new Date();
   };
 
   const getParticipantCount = (item: YogaClass) => {
@@ -314,7 +291,7 @@ export default function ClassesScreen() {
   };
 
   const renderClassCard = (yogaClass: YogaClass) => {
-    const isPast = isItemPast(yogaClass.date, yogaClass.time);
+    const isPast = isClassPast(yogaClass.date, yogaClass.time);
     const isFull = isItemFull(yogaClass);
     const participantCount = getParticipantCount(yogaClass);
     const isBooking = bookingStates[yogaClass.id] || false;
@@ -481,14 +458,25 @@ export default function ClassesScreen() {
           classes.length > 0 ? (
             classes.map(renderClassCard)
           ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                {isTeacher 
-                  ? 'No classes created yet. Create your first class!' 
-                  : 'No classes available at the moment.'
-                }
-              </Text>
-            </View>
+            <EmptyStateIllustration
+              type="classes"
+              message={isTeacher 
+                ? "No classes created yet" 
+                : "No classes available at the moment"
+              }
+              subMessage={isTeacher 
+                ? "Create your first class to get started!" 
+                : "Check back later for new classes"
+              }
+              action={isTeacher && (
+                <TouchableOpacity
+                  style={styles.createClassButton}
+                  onPress={() => setShowCreateModal(true)}
+                >
+                  <Text style={styles.createClassButtonText}>Create Class</Text>
+                </TouchableOpacity>
+              )}
+            />
           )
         ) : (
           retreats.length > 0 ? (
@@ -504,14 +492,25 @@ export default function ClassesScreen() {
               />
             ))
           ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                {isTeacher 
-                  ? 'No retreats created yet. Create your first retreat!' 
-                  : 'No retreats available at the moment.'
-                }
-              </Text>
-            </View>
+            <EmptyStateIllustration
+              type="retreats"
+              message={isTeacher 
+                ? "No retreats created yet" 
+                : "No retreats available at the moment"
+              }
+              subMessage={isTeacher 
+                ? "Create your first retreat to get started!" 
+                : "Check back later for new retreats"
+              }
+              action={isTeacher && (
+                <TouchableOpacity
+                  style={styles.createClassButton}
+                  onPress={() => setShowCreateRetreatModal(true)}
+                >
+                  <Text style={styles.createClassButtonText}>Create Retreat</Text>
+                </TouchableOpacity>
+              )}
+            />
           )
         )}
       </ScrollView>
@@ -535,10 +534,27 @@ export default function ClassesScreen() {
   );
 }
 
+// Add new styles
+const styles = StyleSheet.create({
+  ...styles,
+  createClassButton: {
+    backgroundColor: '#C27B5C',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  createClassButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F9F6F1',
   },
   header: {
     flexDirection: 'row',
@@ -558,7 +574,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   addButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#C27B5C',
     borderRadius: 20,
     width: 40,
     height: 40,
@@ -585,7 +601,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
   },
   tabText: {
     fontSize: 16,
@@ -610,7 +626,7 @@ const styles = StyleSheet.create({
   },
   classCard: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 20,
     marginBottom: 16,
     elevation: 2,
@@ -637,7 +653,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   levelBadge: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#C27B5C',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -653,7 +669,7 @@ const styles = StyleSheet.create({
   },
   classType: {
     fontSize: 14,
-    color: '#C4896F',
+    color: '#C27B5C',
     fontWeight: '500',
     marginBottom: 8,
   },
@@ -690,10 +706,10 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#C4896F',
+    color: '#C27B5C',
   },
   actionButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#C27B5C',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 8,
@@ -712,12 +728,12 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#F0F0F0',
   },
   deleteButton: {
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#FFE5E5',
   },
   emptyState: {

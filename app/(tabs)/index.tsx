@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Calendar, Clock, Users, MapPin } from 'lucide-react-native';
 import TeacherAvatar from '@/components/TeacherAvatar';
 import { AvatarService } from '@/lib/avatarService';
+import { formatDate, formatTime } from '@/lib/utils';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -36,37 +37,6 @@ export default function HomeScreen() {
         .select(`
           *,
           profiles!yoga_classes_teacher_id_fkey (
-            full_name,
-            avatar_url
-          )
-        `)
-        .gte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: true })
-        .limit(5);
-
-      if (error) throw error;
-      setUpcomingClasses(data || []);
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const preloadTeacherAvatars = async () => {
-    const teachers = upcomingClasses
-      .map(cls => ({
-        id: cls.teacher_id,
-        full_name: cls.profiles?.full_name || 'Unknown Teacher',
-        avatar_url: cls.profiles?.avatar_url
-      }))
-      .filter((teacher, index, self) => 
-        index === self.findIndex(t => t.id === teacher.id)
-      );
-
-    await AvatarService.preloadAvatars(teachers);
-  };
-
   const isTeacher = profile?.role === 'teacher';
 
   return (
@@ -208,7 +178,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F9F6F1',
   },
   scrollContent: {
     paddingBottom: 100, // Extra padding to account for tab bar
@@ -266,7 +236,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   levelBadge: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#C27B5C',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -317,10 +287,10 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#C4896F',
+    color: '#C27B5C',
   },
   actionButton: {
-    backgroundColor: '#C4896F',
+    backgroundColor: '#C27B5C',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 8,
@@ -345,7 +315,7 @@ const styles = StyleSheet.create({
   quickActionCard: {
     backgroundColor: 'white',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

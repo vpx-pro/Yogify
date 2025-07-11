@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Image, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { User } from 'lucide-react-native';
 import { AvatarService, AVATAR_SIZES } from '@/lib/avatarService';
+import { getInitials } from '@/lib/utils';
 
 interface TeacherAvatarProps {
   teacherId: string;
@@ -44,10 +45,20 @@ export default function TeacherAvatar({
   const renderFallbackAvatar = () => (
     <View style={[
       styles.fallbackAvatar,
-      { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
+      { 
+        width: avatarSize, 
+        height: avatarSize, 
+        borderRadius: avatarSize / 2,
+        backgroundColor: getAvatarColor(teacherId)
+      },
       style
     ]}>
-      <User size={avatarSize * 0.4} color="white" />
+      <Text style={[
+        styles.initialsText,
+        { fontSize: avatarSize * 0.4 }
+      ]}>
+        {getInitials(teacherName)}
+      </Text>
     </View>
   );
 
@@ -86,6 +97,24 @@ export default function TeacherAvatar({
         )}
       </View>
     );
+  };
+
+  // Generate a consistent color based on the teacher ID
+  const getAvatarColor = (id: string) => {
+    const colors = [
+      '#C27B5C', // Primary brand color
+      '#5C8DC2', // Blue
+      '#5CC27B', // Green
+      '#C25C8D', // Purple
+      '#C2A15C', // Gold
+    ];
+    
+    // Simple hash function to get a consistent index
+    const hash = id.split('').reduce((acc, char) => {
+      return acc + char.charCodeAt(0);
+    }, 0);
+    
+    return colors[hash % colors.length];
   };
 
   if (showName) {
@@ -128,6 +157,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  initialsText: {
+    color: 'white',
+    fontWeight: '600',
   },
   loadingOverlay: {
     position: 'absolute',

@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar, Clock, MapPin, Globe, CreditCard, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Tent } from 'lucide-react-native';
 import type { Database } from '@/lib/supabase';
+import EmptyStateIllustration from '@/components/EmptyStateIllustration';
 
 type BookingWithClass = Database['public']['Tables']['bookings']['Row'] & {
   yoga_classes: Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -365,10 +366,19 @@ export default function MyBookingsScreen() {
               {upcomingClasses.length > 0 ? (
                 upcomingClasses.map((booking) => renderBookingCard(booking, false))
               ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No upcoming classes booked.</Text>
-                  <Text style={styles.emptySubtext}>Book a class to get started!</Text>
-                </View>
+                <EmptyStateIllustration
+                  type="bookings"
+                  message="No upcoming classes booked"
+                  subMessage="Book a class to get started!"
+                  action={
+                    <TouchableOpacity
+                      style={styles.exploreButton}
+                      onPress={() => router.push('/(tabs)/explore')}
+                    >
+                      <Text style={styles.exploreButtonText}>Explore Classes</Text>
+                    </TouchableOpacity>
+                  }
+                />
               )}
             </View>
 
@@ -388,10 +398,19 @@ export default function MyBookingsScreen() {
               {upcomingRetreats.length > 0 ? (
                 upcomingRetreats.map((booking) => renderBookingCard(booking, false))
               ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No upcoming retreats booked.</Text>
-                  <Text style={styles.emptySubtext}>Book a retreat to get started!</Text>
-                </View>
+                <EmptyStateIllustration
+                  type="retreats"
+                  message="No upcoming retreats booked"
+                  subMessage="Book a retreat to get started!"
+                  action={
+                    <TouchableOpacity
+                      style={styles.exploreButton}
+                      onPress={() => router.push('/(tabs)/explore')}
+                    >
+                      <Text style={styles.exploreButtonText}>Explore Retreats</Text>
+                    </TouchableOpacity>
+                  }
+                />
               )}
             </View>
 
@@ -409,10 +428,27 @@ export default function MyBookingsScreen() {
   );
 }
 
+// Add new styles
+const styles = StyleSheet.create({
+  ...styles,
+  exploreButton: {
+    backgroundColor: '#C27B5C',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  exploreButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4EDE4',
+    backgroundColor: '#F9F6F1',
   },
   header: {
     padding: 20,
@@ -445,7 +481,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
   },
   tabText: {
     fontSize: 16,
@@ -493,7 +529,7 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 20,
     marginBottom: 16,
     elevation: 2,
@@ -525,7 +561,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   retreatBadge: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -623,7 +659,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#8B7355',
+    color: '#C27B5C',
   },
   bookingDate: {
     fontSize: 12,
@@ -632,8 +668,6 @@ const styles = StyleSheet.create({
   emptyState: {
     padding: 40,
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
   },
   emptyText: {
     fontSize: 16,

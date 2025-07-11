@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { User, Settings, CircleHelp as HelpCircle, LogOut, Mail, Calendar, Heart, Star, Award, CreditCard as Edit3, ChevronRight } from 'lucide-react-native';
 import TeacherAvatar from '@/components/TeacherAvatar';
+import EmptyStateIllustration from '@/components/EmptyStateIllustration';
 
 type SavedTeacher = {
   id: string;
@@ -178,18 +179,19 @@ export default function ProfileScreen() {
                 ))}
               </ScrollView>
             ) : (
-              <View style={styles.emptyState}>
-                <Heart size={24} color="#CCC" />
-                <Text style={styles.emptyText}>
-                  You haven't saved any teachers yet
-                </Text>
-                <TouchableOpacity 
-                  style={styles.exploreButton}
-                  onPress={() => router.push('/(tabs)/explore')}
-                >
-                  <Text style={styles.exploreButtonText}>Explore Teachers</Text>
-                </TouchableOpacity>
-              </View>
+              <EmptyStateIllustration
+                type="favorites"
+                message="You haven't saved any teachers yet"
+                subMessage="Find and save your favorite yoga instructors"
+                action={
+                  <TouchableOpacity 
+                    style={styles.exploreButton}
+                    onPress={() => router.push('/(tabs)/explore')}
+                  >
+                    <Text style={styles.exploreButtonText}>Explore Teachers</Text>
+                  </TouchableOpacity>
+                }
+              />
             )}
           </View>
         )}
@@ -294,7 +296,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F9F6F1',
   },
   header: {
     flexDirection: 'row',
@@ -311,7 +313,7 @@ const styles = StyleSheet.create({
   editButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F5F0E8',
   },
   content: {
     flex: 1,
@@ -339,7 +341,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#C4896F',
+    backgroundColor: '#C27B5C',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 20,
@@ -395,7 +397,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 14,
-    color: '#8B7355',
+    color: '#C27B5C',
     fontWeight: '500',
   },
   savedTeachersContainer: {
@@ -424,7 +426,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    padding: 20,
+    padding: 12,
   },
   emptyText: {
     fontSize: 14,
@@ -434,7 +436,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   exploreButton: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -472,7 +474,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#8B7355',
+    color: '#C27B5C',
     marginBottom: 4,
   },
   statLabel: {
@@ -527,7 +529,7 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     fontSize: 16,
-    color: '#FF6B6B',
+    color: '#E74C3C',
     fontWeight: '500',
   },
   appInfo: {

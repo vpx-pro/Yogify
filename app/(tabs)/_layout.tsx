@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Calendar, User, BookOpen, Search, CalendarDays, Heart } from 'lucide-react-native';
+import { Home, Calendar, User, BookOpen, Search, CalendarDays, ClipboardCheck, BarChart } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Platform } from 'react-native';
 
@@ -12,7 +12,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#C4896F',
-        tabBarInactiveTintColor: '#666',
+        tabBarInactiveTintColor: '#888',
         tabBarStyle: {
           backgroundColor: 'white',
           borderTopWidth: 1,
@@ -43,17 +43,51 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="classes"
-        options={{
-          title: isTeacher ? 'My Classes' : 'Classes',
-          tabBarIcon: ({ size, color }) => (
-            <Calendar size={size} color={color} />
-          ),
-        }}
-      />
-      {!isTeacher && (
+      
+      {/* Conditionally render tabs based on user role */}
+      {isTeacher ? (
+        // Teacher-specific tabs
         <>
+          <Tabs.Screen
+            name="classes"
+            options={{
+              title: 'My Classes',
+              tabBarIcon: ({ size, color }) => (
+                <Calendar size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="my-schedule"
+            options={{
+              title: 'Schedule',
+              tabBarIcon: ({ size, color }) => (
+                <CalendarDays size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="class-stats"
+            options={{
+              title: 'Stats',
+              tabBarIcon: ({ size, color }) => (
+                <BarChart size={size} color={color} />
+              ),
+            }}
+          />
+        </>
+      ) : (
+        // Student-specific tabs
+        <>
+          <Tabs.Screen
+            name="classes"
+            options={{
+              title: 'Classes',
+              tabBarIcon: ({ size, color }) => (
+                <Calendar size={size} color={color} />
+              ),
+            }}
+          />
           <Tabs.Screen
             name="explore"
             options={{
@@ -66,26 +100,19 @@ export default function TabLayout() {
           <Tabs.Screen
             name="my-bookings"
             options={{
-              title: 'My Bookings',
+              title: 'Bookings',
               tabBarIcon: ({ size, color }) => (
-                <BookOpen size={size} color={color} />
+                <ClipboardCheck size={size} color={color} />
               ),
             }}
           />
         </>
       )}
-      {isTeacher && (
-        <Tabs.Screen
-          name="my-schedule"
-          options={{
-            title: 'My Schedule',
-            tabBarIcon: ({ size, color }) => (
-              <CalendarDays size={size} color={color} />
-            ),
-          }}
-        />
-      )}
-      <Tabs.Screen
+      
+      {!isTeacher && (
+        <>
+          <Tabs.Screen
+            name="explore"
         name="profile"
         options={{
           title: 'Profile',
@@ -94,6 +121,7 @@ export default function TabLayout() {
           ),
         }}
       />
+      
       {/* Hide the old bookings tab since we now have role-specific tabs */}
       <Tabs.Screen
         name="bookings"
@@ -101,6 +129,41 @@ export default function TabLayout() {
           href: null, // This hides the tab
         }}
       />
+      
+      {/* Hide tabs that shouldn't be accessible based on role */}
+      {isTeacher && (
+        <>
+          <Tabs.Screen
+            name="explore"
+            options={{
+              href: null,
+            }}
+          />
+          <Tabs.Screen
+            name="my-bookings"
+            options={{
+              href: null,
+            }}
+          />
+        </>
+      )}
+      
+      {!isTeacher && (
+        <>
+          <Tabs.Screen
+            name="my-schedule"
+            options={{
+              href: null,
+            }}
+          />
+          <Tabs.Screen
+            name="class-stats"
+            options={{
+              href: null,
+            }}
+          />
+        </>
+      )}
     </Tabs>
   );
 }

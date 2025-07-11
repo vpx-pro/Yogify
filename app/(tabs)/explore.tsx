@@ -36,6 +36,7 @@ import {
 import RetreatCard from '@/components/RetreatCard';
 import TeacherAvatar from '@/components/TeacherAvatar';
 import DateRangePicker from '@/components/DateRangePicker';
+import EmptyStateIllustration from '@/components/EmptyStateIllustration';
 import type { Database } from '@/lib/supabase';
 
 type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
@@ -1014,17 +1015,19 @@ export default function ExploreScreen() {
           </Text>
         )}
         ListEmptyComponent={() => (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              No {activeTab} found matching your filters.
-            </Text>
+          <EmptyStateIllustration
+            type="search"
+            message={`No ${activeTab} found matching your filters`}
+            subMessage="Try adjusting your search criteria or explore different options"
+            action={
             <TouchableOpacity
               style={styles.clearFiltersButton}
               onPress={clearFilters}
             >
               <Text style={styles.clearFiltersText}>Clear Filters</Text>
             </TouchableOpacity>
-          </View>
+            }
+          />
         )}
       />
     </SafeAreaView>
@@ -1034,7 +1037,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4EDE4',
+    backgroundColor: '#F9F6F1',
   },
   header: {
     flexDirection: 'row',
@@ -1104,7 +1107,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
   },
   tabText: {
     fontSize: 16,
@@ -1166,7 +1169,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   modeButtonActive: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
   },
   modeButtonText: {
     fontSize: 14,
@@ -1188,7 +1191,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   durationButtonActive: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
   },
   durationButtonText: {
     fontSize: 12,
@@ -1214,7 +1217,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   clearFiltersButton: {
-    backgroundColor: '#8B7355',
+    backgroundColor: '#C27B5C',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
@@ -1364,7 +1367,7 @@ const styles = StyleSheet.create({
   gridPriceText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#8B7355',
+    color: '#C27B5C',
   },
   capacityContainer: {
     backgroundColor: '#F0F0F0',
@@ -1454,16 +1457,6 @@ const styles = StyleSheet.create({
   listPriceText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#8B7355',
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
+    color: '#C27B5C',
   },
 });

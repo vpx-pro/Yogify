@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Calendar, MapPin, Globe, Users, Clock, Heart, Star } from 'lucide-react-native';
 import TeacherAvatar from './TeacherAvatar';
+import { formatDateRange, getRetreatDuration, isEarlyBirdActive } from '@/lib/utils';
 
 interface RetreatCardProps {
   retreat: {
@@ -38,35 +39,11 @@ interface RetreatCardProps {
 export default function RetreatCard({ retreat, onPress, onFavoritePress, compact = false }: RetreatCardProps) {
   const getDuration = () => {
     if (!retreat.retreat_end_date) return 1;
-    const start = new Date(retreat.date);
-    const end = new Date(retreat.retreat_end_date);
-    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  };
-
-  const formatDateRange = () => {
-    const start = new Date(retreat.date);
-    const end = retreat.retreat_end_date ? new Date(retreat.retreat_end_date) : start;
-    
-    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
-    const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
-    const startDay = start.getDate();
-    const endDay = end.getDate();
-    const year = start.getFullYear();
-
-    if (startMonth === endMonth) {
-      return `${startMonth} ${startDay} - ${endDay}, ${year}`;
-    } else {
-      return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${year}`;
-    }
-  };
-
-  const isEarlyBirdActive = () => {
-    if (!retreat.early_bird_deadline) return false;
-    return new Date(retreat.early_bird_deadline) >= new Date();
+    return getRetreatDuration(retreat.date, retreat.retreat_end_date);
   };
 
   const getCurrentPrice = () => {
-    return isEarlyBirdActive() && retreat.early_bird_price 
+    return isEarlyBirdActive(retreat.early_bird_deadline) && retreat.early_bird_price 
       ? retreat.early_bird_price 
       : retreat.price;
   };
@@ -118,7 +95,7 @@ export default function RetreatCard({ retreat, onPress, onFavoritePress, compact
           <View style={styles.durationBadge}>
             <Text style={styles.durationText}>{getDuration()}-Day Retreat</Text>
           </View>
-          {isEarlyBirdActive() && (
+          {isEarlyBirdActive(retreat.early_bird_deadline) && (
             <View style={styles.earlyBirdBadge}>
               <Text style={styles.earlyBirdText}>Early Bird</Text>
             </View>
@@ -165,7 +142,7 @@ export default function RetreatCard({ retreat, onPress, onFavoritePress, compact
         <View style={styles.details}>
           <View style={styles.detailItem}>
             <Calendar size={16} color="#8B7355" />
-            <Text style={styles.detailText}>{formatDateRange()}</Text>
+            <Text style={styles.detailText}>{formatDateRange(retreat.date, retreat.retreat_end_date)}</Text>
           </View>
 
           <View style={styles.detailItem}>
@@ -215,7 +192,7 @@ export default function RetreatCard({ retreat, onPress, onFavoritePress, compact
 
         <View style={styles.footer}>
           <View style={styles.priceContainer}>
-            {isEarlyBirdActive() && retreat.early_bird_price && (
+            {isEarlyBirdActive(retreat.early_bird_deadline) && retreat.early_bird_price && (
               <Text style={styles.originalPrice}>€{retreat.price}</Text>
             )}
             <Text style={styles.price}>€{getCurrentPrice()}</Text>
@@ -283,7 +260,7 @@ const styles = StyleSheet.create({
     left: 8,
   },
   durationBadge: {
-    backgroundColor: 'rgba(139, 115, 85, 0.9)',
+    backgroundColor: 'rgba(194, 123, 92, 0.9)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -425,12 +402,12 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#8B7355',
+    color: '#C27B5C',
   },
   compactPrice: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#8B7355',
+    color: '#C27B5C',
   },
   levelBadge: {
     backgroundColor: '#F4EDE4',
@@ -440,7 +417,7 @@ const styles = StyleSheet.create({
   },
   levelText: {
     fontSize: 12,
-    color: '#8B7355',
+    color: '#C27B5C',
     fontWeight: '500',
     textTransform: 'capitalize',
   },
