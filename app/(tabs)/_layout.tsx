@@ -34,6 +34,7 @@ export default function TabLayout() {
           marginTop: 5,
         },
       }}>
+      {/* Common tabs for all users */}
       <Tabs.Screen
         name="index"
         options={{
@@ -44,7 +45,7 @@ export default function TabLayout() {
         }}
       />
       
-      {/* Conditionally render tabs based on user role */}
+      {/* Role-specific tabs */}
       {isTeacher ? (
         // Teacher-specific tabs
         <>
@@ -109,6 +110,7 @@ export default function TabLayout() {
         </>
       )}
       
+      {/* Profile tab for all users */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -126,41 +128,6 @@ export default function TabLayout() {
           href: null, // This hides the tab
         }}
       />
-      
-      {/* Hide tabs that shouldn't be accessible based on role */}
-      {isTeacher && (
-        <>
-          <Tabs.Screen
-            name="explore"
-            options={{
-              href: null,
-            }}
-          />
-          <Tabs.Screen
-            name="my-bookings"
-            options={{
-              href: null,
-            }}
-          />
-        </>
-      )}
-      
-      {!isTeacher && (
-        <>
-          <Tabs.Screen
-            name="my-schedule"
-            options={{
-              href: null,
-            }}
-          />
-          <Tabs.Screen
-            name="class-stats"
-            options={{
-              href: null,
-            }}
-          />
-        </>
-      )}
     </Tabs>
   );
 }
