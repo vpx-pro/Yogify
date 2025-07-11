@@ -117,7 +117,7 @@ export default function HomeScreen() {
                   </View>
                   
                   <View style={styles.classFooter}>
-                    <Text style={styles.priceText}>{`$${yogaClass.price}`}</Text>
+                    <Text style={styles.priceText}>{'$' + yogaClass.price}</Text>
                     <TouchableOpacity style={styles.actionButton}>
                       <Text style={styles.actionButtonText}>
                         {isTeacher ? 'View' : 'Book Now'}
