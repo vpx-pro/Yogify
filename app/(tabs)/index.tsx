@@ -200,6 +200,10 @@ export default function HomeScreen() {
             )}
           </View>
         </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
 const styles = StyleSheet.create({
   container: {
