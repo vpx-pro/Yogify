@@ -534,23 +534,6 @@ export default function ClassesScreen() {
   );
 }
 
-// Add new styles
-const styles = StyleSheet.create({
-  ...styles,
-  createClassButton: {
-    backgroundColor: '#C27B5C',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 12,
-  },
-  createClassButtonText: {
-    fontSize: 14,
-    color: 'white',
-    fontWeight: '500',
-  },
-});
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -744,5 +727,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  createClassButton: {
+    backgroundColor: '#C27B5C',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  createClassButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
   },
 });

@@ -502,23 +502,6 @@ export default function MyScheduleScreen() {
   );
 }
 
-// Add new styles
-const styles = StyleSheet.create({
-  ...styles,
-  createButton: {
-    backgroundColor: '#C27B5C',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 12,
-  },
-  createButtonText: {
-    fontSize: 14,
-    color: 'white',
-    fontWeight: '500',
-  },
-});
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -864,5 +847,17 @@ const styles = StyleSheet.create({
   },
   pendingText: {
     color: '#FF9800',
+  },
+  createButton: {
+    backgroundColor: '#C27B5C',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  createButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
   },
 });

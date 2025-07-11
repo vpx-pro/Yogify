@@ -428,23 +428,6 @@ export default function MyBookingsScreen() {
   );
 }
 
-// Add new styles
-const styles = StyleSheet.create({
-  ...styles,
-  exploreButton: {
-    backgroundColor: '#C27B5C',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 12,
-  },
-  exploreButtonText: {
-    fontSize: 14,
-    color: 'white',
-    fontWeight: '500',
-  },
-});
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -679,5 +662,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  exploreButton: {
+    backgroundColor: '#C27B5C',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  exploreButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
   },
 });
