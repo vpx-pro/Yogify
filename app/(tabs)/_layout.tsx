@@ -109,10 +109,7 @@ export default function TabLayout() {
         </>
       )}
       
-      {!isTeacher && (
-        <>
-          <Tabs.Screen
-            name="explore"
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
@@ -120,8 +117,6 @@ export default function TabLayout() {
             <User size={size} color={color} />
           ),
         }}
-      )
-      }
       />
       
       {/* Hide the old bookings tab since we now have role-specific tabs */}
