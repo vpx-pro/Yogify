@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Calendar, Clock, Users, MapPin, CircleAlert as AlertCircle } from 'lucide-react-native';
@@ -17,6 +18,7 @@ type YogaClass = Database['public']['Tables']['yoga_classes']['Row'] & {
 
 export default function HomeScreen() {
   const { profile } = useAuth();
+  const router = useRouter();
   const [upcomingClasses, setUpcomingClasses] = useState<YogaClass[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -149,8 +151,10 @@ export default function HomeScreen() {
                   <View style={styles.classFooter}>
                     <Text style={styles.priceText}>{'$' + yogaClass.price}</Text>
                     <TouchableOpacity style={styles.actionButton}>
-                      style={styles.actionButton}
-                      onPress={() => router.push(`/class-detail/${yogaClass.id}`)}>
+                      style={styles.actionButton} 
+                      onPress={() => router.push(`/class-detail/${yogaClass.id}`)}
+                    >
+                      <Text style={styles.actionButtonText}>
                         {isTeacher ? 'View' : 'Book Now'}
                       </Text>
                     </TouchableOpacity>
@@ -176,38 +180,42 @@ export default function HomeScreen() {
           <View style={styles.quickActions}>
             {isTeacher ? (
               <>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.quickActionCard}
-                  onPress={() => router.push('/(tabs)/classes')}>
+                  onPress={() => router.push('/(tabs)/classes')}
+                >
                   <Text style={styles.quickActionTitle}>Create Class</Text>
                   <Text style={styles.quickActionSubtitle}>Schedule a new yoga session</Text>
                 </TouchableOpacity>
                 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.quickActionCard}
-                  onPress={() => router.push('/(tabs)/my-schedule')}>
+                  onPress={() => router.push('/(tabs)/my-schedule')}
+                >
                   <Text style={styles.quickActionTitle}>View Students</Text>
                   <Text style={styles.quickActionSubtitle}>See your enrolled students</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.quickActionCard}
-                  onPress={() => router.push('/(tabs)/explore')}>
+                  onPress={() => router.push('/(tabs)/explore')}
+                >
                   <Text style={styles.quickActionTitle}>Find Classes</Text>
                   <Text style={styles.quickActionSubtitle}>Browse available sessions</Text>
                 </TouchableOpacity>
                 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.quickActionCard}
                   onPress={() => {
                     Alert.alert(
                       'Coming Soon',
                       'The progress tracking feature will be available in the next update!',
                       [{ text: 'OK' }]
-                    );
-                  }}>
+                    )
+                  }}
+                >
                   <Text style={styles.quickActionTitle}>My Progress</Text>
                   <Text style={styles.quickActionSubtitle}>Track your yoga journey</Text>
                 </TouchableOpacity>
