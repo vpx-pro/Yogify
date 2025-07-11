@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { BarChart2, TrendingUp, Users, Calendar, Award, ChevronRight } from 'lucide-react-native';
+import { ChartBar as BarChart2, TrendingUp, Users, Calendar, Award, ChevronRight } from 'lucide-react-native';
 import { ParticipantCountService } from '@/lib/participantCountService';
 
 export default function ClassStatsScreen() {
