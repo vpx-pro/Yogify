@@ -151,7 +151,7 @@ export default function HomeScreen() {
                   <View style={styles.classFooter}>
                     <Text style={styles.priceText}>{'$' + yogaClass.price}</Text>
                     <TouchableOpacity 
-                      style={styles.actionButton} 
+                      style={styles.actionButton}
                       onPress={() => router.push(`/class-detail/${yogaClass.id}`)}
                     >
                       <Text style={styles.actionButtonText}>
