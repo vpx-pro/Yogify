@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, Calendar, User, BookOpen, Search, CalendarDays, ClipboardCheck, BarChart } from 'lucide-react-native';
+import { Chrome as Home, Calendar, User, BookOpen, Search, CalendarDays, ClipboardCheck, ChartBar as BarChart } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Platform } from 'react-native';
 
@@ -120,6 +120,8 @@ export default function TabLayout() {
             <User size={size} color={color} />
           ),
         }}
+      )
+      }
       />
       
       {/* Hide the old bookings tab since we now have role-specific tabs */}
