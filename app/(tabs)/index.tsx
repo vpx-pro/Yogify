@@ -37,6 +37,36 @@ export default function HomeScreen() {
         .select(`
           *,
           profiles!yoga_classes_teacher_id_fkey (
+            full_name,
+            avatar_url
+          )
+        `)
+        .gte('date', new Date().toISOString().split('T')[0])
+        .order('date', { ascending: true })
+        .order('time', { ascending: true })
+        .limit(5);
+
+      if (error) {
+        console.error('Error fetching classes:', error);
+        return;
+      }
+
+      setUpcomingClasses(data || []);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const preloadTeacherAvatars = async () => {
+    for (const yogaClass of upcomingClasses) {
+      if (yogaClass.profiles?.avatar_url) {
+        await AvatarService.preloadAvatar(yogaClass.profiles.avatar_url);
+      }
+    }
+  };
+
   const isTeacher = profile?.role === 'teacher';
 
   return (
